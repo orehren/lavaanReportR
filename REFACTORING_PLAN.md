@@ -89,3 +89,42 @@ This section identifies specific violations of the "Never-Nesting" rule (max two
     -   **Validation**: Write dedicated tests for the validation helpers to ensure they correctly catch invalid user input.
 4.  **Implement Snapshot Testing**:
     -   **Build Phase**: For the `build` phase, use `testthat::expect_snapshot_output()` to test that the generated DOT code is correct and remains consistent for a variety of models. This is an efficient way to detect regressions in the plot structure.
+
+## 5. Architectural Philosophy: S3 vs. R6
+
+### Assessment of the Current S3 Approach
+
+The current S3 object-oriented approach is a **very strong and well-chosen design pattern** for this package's core task. The workflow is fundamentally a **linear transformation pipeline**: raw `lavaan` data is progressively transformed through the analyze, configure, prepare, and build stages until it is rendered as a plot.
+
+This is a classic functional data flow. The S3 generic/method system, invoked via `verb(object)`, is a perfect fit for this paradigm for several reasons:
+
+-   **Pipe-Friendly:** The `verb(object)` dispatch style integrates seamlessly with R's native pipe (`|>`), making the top-level workflow exceptionally readable and elegant.
+-   **Stateless and Predictable:** Each function in the pipeline is stateless. It receives an object of a specific class, transforms it, and returns a new object of a different class. This functional purity makes the code easy to reason about, debug, and test in isolation.
+-   **Lightweight:** S3 is a core part of R and introduces no external dependencies.
+
+In short, the S3 approach here is idiomatic, effective, and a great example of "functional-OO" in R.
+
+### Consideration of an R6 Approach
+
+An R6 approach would represent a fundamentally different design, shifting from a functional pipeline to a stateful object model. A hypothetical workflow might involve creating a single, stateful "plotter" object and calling methods that modify its internal state:
+
+```r
+# Hypothetical R6 workflow
+plotter <- LavaanPlotter$new(my_lavaan_model)
+plotter$configure(estimates_to_show = "standardized")
+plotter$prepare()
+plotter$build()
+plotter$render()
+```
+
+While R6 is a powerful system, it presents several disadvantages for this specific package:
+
+-   **Stateful Complexity:** The primary advantage of R6 is encapsulating complex, mutable state. However, the current workflow is not complex in a way that demands stateful management; its linear nature is a strength. Introducing a single object that holds all intermediate data products could make the state harder to track compared to the explicit input/output of the S3 pipeline.
+-   **Breaks the Functional Flow:** The `object$method()` syntax does not work with the `|>` pipe, which would sacrifice the readability of the top-level API.
+-   **Architectural Overhead:** Moving to R6 would be a complete architectural rewrite, not a simple refactor. The effort required would be substantial.
+
+### Recommendation
+
+**Retain the existing S3 architecture.**
+
+It is an excellent fit for the problem domain and a key strength of the current design. The most significant gains in quality and maintainability will come from implementing the changes already outlined in this plan—reorganizing files, flattening complex functions, and building a robust test suite—rather than from a disruptive and unnecessary architectural change.

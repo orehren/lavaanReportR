@@ -1,13 +1,43 @@
-# Agent Instructions for the lavaanReportR Repository
+# Agent Instructions for lavaanReportR
 
-## Core Requirement: Development Environment
+## Core Workflow: Docker-Based Development
 
-**All development, testing, package building, and command execution MUST occur within the Docker environment defined by the `Dockerfile` in this repository's root.**
+This project's environment is defined by the `Dockerfile`. All development, testing, and verification commands MUST be run inside a container built from this file to ensure perfect reproducibility.
 
-This is a non-negotiable rule to ensure a consistent and reproducible workflow. The agent must assume that the host system has no R-related tools installed. All necessary tools (R, devtools, R packages, system libraries) are exclusively provided by the Docker image.
+### 1. Build the Docker Image
 
-### Guiding Principles
+Before starting any work, build the Docker image from the Dockerfile. This image will contain all necessary dependencies.
 
-1.  **Environment is Pre-configured:** You will be operating inside an environment already built from the `Dockerfile`. You do not need to run `docker build` or `docker run` commands yourself.
-2.  **Tooling:** Rely solely on the tools installed within the environment. For example, use `Rscript`, `devtools::check()`, `devtools::test()`, etc., directly from the command line inside the container.
-3.  **Verification:** Before finalizing any task, ensure the package passes a full `devtools::check()` within this environment to confirm it is valid and complete.
+```bash
+docker build -t lavaan-dev
+```
+
+2. Run Commands Inside the Container
+All subsequent commands must be executed within the lavaan-dev container. Use the following docker run format, which mounts the current project directory into the container's /work directory.
+
+Replace "<command-to-run>" with the specific command you need to execute.
+
+```bash
+docker run --rm -v "$(pwd)":/work lavaan-dev <command-to-run>
+```
+
+Required Verification Commands
+After making any code changes, you MUST run the following verification commands using the format described above.
+
+Regenerate Documentation and Namespace:
+
+```bash
+docker run --rm -v "$(pwd)":/work lavaan-dev Rscript -e 'devtools::document()'
+```
+
+Run the Test Suite:
+
+```bash
+docker run --rm -v "$(pwd)":/work lavaan-dev Rscript -e 'devtools::test()'
+```
+
+Perform a Full Package Check:
+
+```bash
+docker run --rm -v "$(pwd)":/work lavaan-dev Rscript -e 'devtools::check()'
+```

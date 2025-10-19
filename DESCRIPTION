@@ -28,3 +28,5 @@ Suggests:
     roxygen2,
     knitr,
     rmarkdown
+URL: https://github.com/orehren/lavaanReportR
+BugReports: https://github.com/orehren/lavaanReportR/issues

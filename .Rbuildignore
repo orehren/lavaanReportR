@@ -1,0 +1,12 @@
+^renv$
+^renv\.lock$
+^.*\.Rproj$
+^\.Rproj\.user$
+^_00_srcfiles$
+^_00_srcfiles\*$
+^_10_data$
+^_10_data\*$
+^_20_output$
+^_20_output\*$
+^data-raw$
+^LICENSE\.md$

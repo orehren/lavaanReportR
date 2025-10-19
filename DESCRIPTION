@@ -1,0 +1,30 @@
+Package: lavaanReportR
+Type: Package
+Title: Streamlined Reporting for Multilevel SEM Models from 'lavaan'
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Oliver", "Rehren", 
+      email = "o.rehren@gmail.com", 
+      role = c("aut", "cre"), 
+      comment = c(ORCID = "0000-0001-7602-8219")
+      )
+    )
+Description: Provides auxiliary functions for the automatic generation of publication-ready formatted tables of coefficients, fit indices, and model comparisons for multilevel structural equation models (SEM) fitted with the 'lavaan' package. 
+    It aims to simplify the reporting workflow by producing tables suitable for direct inclusion in Quarto documents, with a focus on handling complex multilevel data structures (multiple levels, clusters, and groups) correctly.
+License: GPL (>= 3)
+Encoding: UTF-8
+LazyData: true
+Imports: 
+    lavaan,
+    igraph,
+    DiagrammeR,
+    data.table,
+    psych
+Suggests: 
+    devtools,
+    testthat,
+    usethis,
+    roxygen2,
+    knitr,
+    rmarkdown

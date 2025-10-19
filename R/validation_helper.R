@@ -56,23 +56,11 @@ NULL
     validator_args <- c(validator_args, rule$args)
 
     if (isTRUE(rule$is_contextual)) {
-      contextual_args <- switch(arg_name,
-        data_object = ,
-        table_object = list(expected_class = data_object_class),
-        x = list(expected_class = "psych"),
-        groupname_col = ,
-        rowname_col = ,
-        # hide_cols = list(allowed_strings = names(args_list$data_object)),
-        output_format = list(allowed_strings = valid_output_formats),
-        # footnote_specs = list(data_colnames = names(args_list$data_object)),
-        # node_labels = list(allowed_strings = unique(c(args_list$data_object$lhs, args_list$data_object$rhs))),
-        # effect_labels = list(allowed_strings = unique(args_list$data_object[, label])), # label != "", label
-        hide_cols = list(allowed_strings = .get_allowed_strings_from_data(args_list$data_object, source = "names")),
-        footnote_specs = list(data_colnames = .get_allowed_strings_from_data(args_list$data_object, source = "names")),
-        node_labels = list(allowed_strings = .get_allowed_strings_from_data(args_list$data_object, source = "values", cols = c("lhs", "rhs"), filter_empty = TRUE)),
-        effect_labels = list(allowed_strings = .get_allowed_strings_from_data(args_list$data_object, source = "values", cols = c("lhs", "rhs"), filter_empty = TRUE)),
-        "..." = list(data = args_list$data),
-        list()
+      contextual_args <- .build_contextual_args(
+        arg_name,
+        data_object_class,
+        valid_output_formats,
+        args_list
       )
       validator_args <- c(validator_args, contextual_args)
     }
@@ -91,6 +79,29 @@ NULL
   }
 
   invisible(TRUE)
+}
+
+#' @title Build Contextual Arguments for Validation
+#' @description An internal helper for [`.validate_function_args()`] that
+#'   encapsulates the logic for assembling context-dependent validation arguments.
+#' @return A named list of contextual arguments to be passed to a validator function.
+#' @keywords internal
+#' @noRd
+.build_contextual_args <- function(arg_name, data_object_class, valid_output_formats, args_list) {
+  switch(arg_name,
+    data_object = ,
+    table_object = list(expected_class = data_object_class),
+    x = list(expected_class = "psych"),
+    groupname_col = ,
+    rowname_col = ,
+    output_format = list(allowed_strings = valid_output_formats),
+    hide_cols = list(allowed_strings = .get_allowed_strings_from_data(args_list$data_object, source = "names")),
+    footnote_specs = list(data_colnames = .get_allowed_strings_from_data(args_list$data_object, source = "names")),
+    node_labels = list(allowed_strings = .get_allowed_strings_from_data(args_list$data_object, source = "values", cols = c("lhs", "rhs"), filter_empty = TRUE)),
+    effect_labels = list(allowed_strings = .get_allowed_strings_from_data(args_list$data_object, source = "values", cols = c("lhs", "rhs"), filter_empty = TRUE)),
+    "..." = list(data = args_list$data),
+    list()
+  )
 }
 
 # ------------------------------------------------------------------------------
@@ -452,67 +463,97 @@ NULL
                                                           allowed_strings,
                                                           arg_name_for_msg,
                                                           allow_null = TRUE) {
+  # --- Guard Clause: Handle NULL or missing arguments ---
   if (rlang::quo_is_null(quo_string_selection) || rlang::quo_is_missing(quo_string_selection)) {
-    if (allow_null) {
-      return(invisible(NULL))
-    } else {
-      stop(sprintf("Argument '%s' cannot be NULL or missing.", arg_name_for_msg), call. = FALSE)
-    }
+    if (allow_null) return(invisible(NULL))
+    stop(sprintf("Argument '%s' cannot be NULL or missing.", arg_name_for_msg), call. = FALSE)
   }
 
-  expr_string_selection <- rlang::quo_get_expr(quo_string_selection)
+  expr <- rlang::quo_get_expr(quo_string_selection)
 
-  if (is.character(expr_string_selection)) {
-    if (!all(expr_string_selection %in% allowed_strings)) {
-      missing_strings <- setdiff(expr_string_selection, allowed_strings)
-      stop(sprintf(
-        "Argument '%s' contains invalid value(s): %s. \nAllowed values: %s.",
-        arg_name_for_msg,
-        paste(dQuote(missing_strings), collapse = ", "),
-        paste(dQuote(allowed_strings), collapse = ", ")
-      ), call. = FALSE)
-    }
-  } else if (rlang::is_call(expr_string_selection) && rlang::call_name(expr_string_selection) == "c") {
-    call_args <- rlang::call_args(expr_string_selection)
-    for (arg_item in call_args) {
-      if (is.character(arg_item)) {
-        if (!all(arg_item %in% allowed_strings)) {
-          missing_strings <- setdiff(arg_item, allowed_strings)
-          stop(sprintf(
-            "In argument '%s', a character vector within c() contains invalid value(s): %s. \nAllowed values: %s.",
-            arg_name_for_msg,
-            paste(dQuote(missing_strings), collapse = ", "),
-            paste(dQuote(allowed_strings), collapse = ", ")
-          ), call. = FALSE)
-        }
-      } else if (rlang::is_symbol(arg_item)) {
-        if (!as.character(arg_item) %in% allowed_strings) {
-          stop(sprintf(
-            "In argument '%s', the name '%s' provided within c() is not a valid value. \nValid values: %s.",
-            arg_name_for_msg,
-            as.character(arg_item),
-            paste(dQuote(allowed_strings), collapse = ", ")
-          ), call. = FALSE)
-        }
-      }
-    }
-  } else if (rlang::is_symbol(expr_string_selection)) {
-    if (!as.character(expr_string_selection) %in% allowed_strings) {
-      stop(sprintf(
-        "In argument '%s', the value '%s' is not valid. \nValid values: %s.",
-        arg_name_for_msg,
-        as.character(expr_string_selection),
-        paste(dQuote(allowed_strings), collapse = ", ")
-      ), call. = FALSE)
-    }
-  } else if (rlang::is_call(expr_string_selection) || is.numeric(expr_string_selection)) {
-    invisible(NULL)
-  } else {
+  # --- Dispatch to specialized handlers based on expression type ---
+  if (is.character(expr)) {
+    .validate_character_selector(expr, allowed_strings, arg_name_for_msg)
+  } else if (rlang::is_symbol(expr)) {
+    .validate_symbol_selector(expr, allowed_strings, arg_name_for_msg)
+  } else if (rlang::is_call(expr)) {
+    # For calls like `c(...)`, `starts_with(...)`, etc.
+    .validate_call_selector(expr, allowed_strings, arg_name_for_msg)
+  } else if (!is.numeric(expr)) {
+    # If it's none of the above (and not a numeric index), it's invalid.
     stop(sprintf(
-      "Argument '%s' has an unexpected type or structure: %s. \nExpected NULL, character vector, symbol, or a call (e.g., starts_with(), c()).",
-      arg_name_for_msg,
-      rlang::as_label(quo_string_selection)
+      "Argument '%s' has an unexpected type: %s. Expected a character vector, name, or call.",
+      arg_name_for_msg, rlang::as_label(quo_string_selection)
     ), call. = FALSE)
+  }
+
+  invisible(NULL)
+}
+
+
+#' @title Validate a Character Vector Selector
+#' @description Checks if all elements in a character vector are valid choices.
+#' @return Invisibly returns `NULL` or stops with an error.
+#' @keywords internal
+#' @noRd
+.validate_character_selector <- function(expr, allowed_strings, arg_name_for_msg) {
+  # Guard Clause: Check if all provided strings are in the allowed set.
+  if (all(expr %in% allowed_strings)) {
+    return(invisible(NULL))
+  }
+
+  # If not, construct a detailed error message.
+  missing_strings <- setdiff(expr, allowed_strings)
+  stop(sprintf(
+    "Argument '%s' contains invalid value(s): %s. \nAllowed values: %s.",
+    arg_name_for_msg,
+    paste(dQuote(missing_strings), collapse = ", "),
+    paste(dQuote(allowed_strings), collapse = ", ")
+  ), call. = FALSE)
+}
+
+
+#' @title Validate a Symbol Selector
+#' @description Checks if a single symbol (name) is a valid choice.
+#' @return Invisibly returns `NULL` or stops with an error.
+#' @keywords internal
+#' @noRd
+.validate_symbol_selector <- function(expr, allowed_strings, arg_name_for_msg) {
+  symbol_as_string <- as.character(expr)
+  if (symbol_as_string %in% allowed_strings) {
+    return(invisible(NULL))
+  }
+  stop(sprintf(
+    "In argument '%s', the name '%s' is not a valid value. \nValid values: %s.",
+    arg_name_for_msg,
+    symbol_as_string,
+    paste(dQuote(allowed_strings), collapse = ", ")
+  ), call. = FALSE)
+}
+
+
+#' @title Validate a Call Expression Selector
+#' @description Validates calls like `c("x", "y")`. It checks the arguments
+#'   within a `c()` call but allows other function calls (like `starts_with`)
+#'   to pass through unchecked, mirroring the original function's logic.
+#' @return Invisibly returns `NULL` or stops with an error.
+#' @keywords internal
+#' @noRd
+.validate_call_selector <- function(expr, allowed_strings, arg_name_for_msg) {
+  # We only explicitly validate the contents of a `c()` call.
+  if (rlang::call_name(expr) != "c") {
+    # For any other call (e.g., starts_with), we don't validate further.
+    return(invisible(NULL))
+  }
+
+  call_args <- rlang::call_args(expr)
+  # Iterate through the arguments of the c() call and validate each one.
+  for (arg_item in call_args) {
+    if (is.character(arg_item)) {
+      .validate_character_selector(arg_item, allowed_strings, arg_name_for_msg)
+    } else if (rlang::is_symbol(arg_item)) {
+      .validate_symbol_selector(arg_item, allowed_strings, arg_name_for_msg)
+    }
   }
   invisible(NULL)
 }
@@ -653,9 +694,21 @@ NULL
 #' @return Invisibly returns `TRUE` if validation passes.
 #' @noRd
 .validate_reliability_ellipsis <- function(ellipsis_args, arg_name_for_msg, data) {
-  psych_alpha_arg_names <- intersect(names(formals(psych::alpha)), names(ellipsis_args))
+  # --- Step 1: Conditionally find arguments for psych::alpha ---
+  # If the psych package is not installed, we cannot check its formals.
+  # In this case, we assume no arguments are intended for it and issue a message.
+  psych_alpha_arg_names <- character(0) # Default to no arguments
+  if (requireNamespace("psych", quietly = TRUE)) {
+    psych_alpha_arg_names <- intersect(names(formals(psych::alpha)), names(ellipsis_args))
+  } else if (length(ellipsis_args) > 0) {
+    # Only message if the user actually passed arguments that *might* be for psych.
+    message("Note: 'psych' package not found. All '...' arguments will be treated as scales.")
+  }
+
+  # --- Step 2: Identify the arguments that define the scales ---
   items_list_args <- ellipsis_args[setdiff(names(ellipsis_args), psych_alpha_arg_names)]
 
+  # --- Step 3: Validate the scale arguments ---
   if (length(items_list_args) == 0) {
     stop("No scales provided in `...`. Please provide at least one named argument with a character vector of item names.", call. = FALSE)
   }

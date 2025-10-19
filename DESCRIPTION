@@ -20,8 +20,9 @@ Imports:
     igraph,
     DiagrammeR,
     data.table,
-    psych
+    purrr
 Suggests: 
+    psych,
     devtools,
     testthat,
     usethis,

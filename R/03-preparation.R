@@ -329,7 +329,7 @@
 #'   from the recipe, and then joins these final styles to the edges table
 #'   based on `edge_type`. This implementation uses a functional approach with
 #'   `lapply` and programmatically constructs the update-join call for each
-#'   style attribute, adhering to modern `data.table` programming idioms.
+`   style attribute, adhering to modern `data.table` programming idioms.
 #'
 #' @param edges_data The edge data table.
 #' @param recipe The final, complete recipe object.

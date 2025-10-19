@@ -127,7 +127,7 @@
 #' @keywords internal
 #' @noRd
 .determine_default_split_hierarchy <- function(features) {
-  purrr::compact(c(
+  compact(c(
     if (features$has_group) "group",
     if (features$has_level) "level"
   ))
@@ -157,12 +157,12 @@
   param_subsets <- split(param_table, by = split_cols)
 
   # Der Aufruf an den Worker wird vereinfacht.
-  lgm_results_per_subset <- purrr::map(
+  lgm_results_per_subset <- map(
     param_subsets,
     ~ .analyze_lgm_components(.x) # Kein `has_latent` mehr nötig
   )
 
-  purrr::detect(lgm_results_per_subset, ~ .x$is_lgm)
+  detect(lgm_results_per_subset, ~ .x$is_lgm)
 }
 
 #' @title Analyze LGM Components (Orchestrator)
@@ -214,7 +214,7 @@
   list(
     is_lgm = TRUE,
     lgm_type = lgm_type,
-    element_groups = purrr::compact(element_groups)
+    element_groups = compact(element_groups)
   )
 }
 
@@ -340,35 +340,36 @@
   # Look up the definition for the current path label.
   row_data <- dt[label == path_label]
 
-  # --- Base Cases: Stop recursion if the path is atomic ---
+  # --- Guard Clauses for Base Cases (Atomic Paths) ---
 
-  # Case 1: The label doesn't exist as a definition or has no formula.
-  # This means it's a base path label (e.g., "a", "b", "c_p").
+  # Guard 1: The label is not a defined parameter or has no formula.
   if (nrow(row_data) == 0 || row_data$rhs == "") {
     return(path_label)
   }
 
-  # Case 2: The label refers to a simple regression or loading. Also a base path.
-  if (row_data$op == MODEL_OPS$REGRESSIONS || row_data$op == MODEL_OPS$LOADINGS) {
+  # Guard 2: The label refers to a simple, atomic regression or loading.
+  is_atomic_path <- row_data$op %in% c(MODEL_OPS$REGRESSIONS, MODEL_OPS$LOADINGS)
+  if (is_atomic_path) {
     return(row_data$label)
   }
 
-  # --- Recursive Step: The path is a complex defined parameter ---
-  if (row_data$op == MODEL_OPS$DEFINED) {
-    # Split the formula string by any operator to get the components.
-    parts <- strsplit(row_data$rhs, "[-+*()]") |> unlist()
-    parts <- trimws(parts)
-    parts <- parts[nchar(parts) > 0] # Remove empty strings from splitting
-
-    # Recursively call this function for each component to break it down further.
-    result_list <- lapply(parts, .resolve_to_path_labels, dt = dt)
-
-    # Collect and return all unique atomic parts from all recursive branches.
-    return(unlist(result_list) |> unique())
+  # Guard 3: The "definition" is not a complex := operation. Treat as atomic.
+  if (row_data$op != MODEL_OPS$DEFINED) {
+    return(path_label)
   }
 
-  # Fallback: If it's some other type, treat it as a base path.
-  return(path_label)
+  # --- Recursive Step (for complex defined parameters) ---
+
+  # Split the formula string by any operator to get the components.
+  parts <- strsplit(row_data$rhs, "[-+*()]") |> unlist()
+  parts <- trimws(parts)
+  parts <- parts[nzchar(parts)] # Use nzchar for a cleaner filter
+
+  # Recursively call this function for each component.
+  result_list <- lapply(parts, .resolve_to_path_labels, dt = dt)
+
+  # Collect and return all unique atomic parts.
+  return(unique(unlist(result_list)))
 }
 
 
@@ -660,7 +661,7 @@
 #' @noRd
 .assemble_layout_data <- function(layout_results) {
   # Filter out any NULL results from element units that had no nodes
-  valid_results <- purrr::compact(layout_results)
+  valid_results <- compact(layout_results)
 
   # Guard Clause: If no valid layouts could be calculated at all.
   if (length(valid_results) == 0) {
@@ -672,7 +673,7 @@
 
   # Combine all level lists from the valid results into a single list.
   # `unlist(recursive = FALSE)` correctly merges the lists of lists.
-  all_levels <- purrr::map(valid_results, "levels_list") |>
+  all_levels <- map(valid_results, "levels_list") |>
     unlist(recursive = FALSE)
 
   # Re-number the final levels sequentially from 1.
@@ -681,7 +682,7 @@
   # --- 2. Assemble the final map of elements to units ---
 
   # Combine all element unit info tables into a single map.
-  element_unit_map <- purrr::map_dfr(valid_results, "element_unit_info", .id = "element_unit_order")
+  element_unit_map <- map_dfr(valid_results, "element_unit_info", .id = "element_unit_order")
 
   # Convert the order column to integer for potential sorting later.
   element_unit_map[, element_unit_order := as.integer(element_unit_order)]
@@ -1047,29 +1048,40 @@
 #' @keywords internal
 #' @noRd
 .modify_moderated_edges <- function(edges) {
-  # 1. Identify all moderation edges from the edges table.
-  #    These are the edges that go from the interaction term to the criterion.
+  # --- 1. Identify Moderation Edges ---
   moderation_edges <- edges[edge_type == EDGE_TYPES$MODERATED_PATH_SEGMENT_2]
 
-  # Early exit if no moderation effects are present.
+  # --- 2. Guard Clause ---
+  # If there are no moderation effects, return the original table immediately.
   if (nrow(moderation_edges) == 0) {
-    return(invisible(edges))
+    return(edges)
   }
 
-  lapply(seq_len(nrow(moderation_edges)), function(i) {
-    mod_edge <- moderation_edges[i, ]
+  # --- 3. Create a Lookup Table for the Update Join ---
+  # This table maps the target simple regression (by its `from` and `to`) to
+  # the new `from` anchor and `edge_type` it should receive.
+  update_lookup <- moderation_edges[, .(
+    # The original predictor (e.g., "y1") is the part before the first underscore.
+    original_from = sapply(strsplit(from, "_"), `[`, 1),
+    to = to,
+    # The new values to assign.
+    new_from = from,
+    new_edge_type = edge_type
+  )]
 
-    # Find the simple regression edge (e.g., y1 -> y4) and update it by reference.
-    # This is a direct, targeted update.
-    edges[
-      from == strsplit(mod_edge$from, "_")[[1]][1] & to == mod_edge$to,
-      `:=`(
-        from = mod_edge$from,
-        edge_type = mod_edge$edge_type
-      )
-    ]
-  })
+  # --- 4. Perform the data.table Update Join ---
+  # This single, declarative operation replaces the entire lapply loop.
+  # It finds matching rows in `edges` and updates their `from` and `edge_type`
+  # by reference. It's atomic, efficient, and highly readable.
+  edges[update_lookup,
+    on = .(from = original_from, to = to),
+    `:=`(from = i.new_from, edge_type = i.new_edge_type)
+  ]
 
+  # --- 5. Final Filtering ---
+  # Remove the original moderation edge rows, as their information has now been
+  # integrated into the main regression paths.
+  # Using an anti-join (`!`) is the canonical data.table way to do this.
   final_edges <- edges[!moderation_edges, on = names(edges)]
 
   return(final_edges)

@@ -56,11 +56,11 @@
 #' @keywords internal
 #' @noRd
 .apply_user_arg_defaults <- function(user_args) {
-  # `purrr::compact` removes all user-provided NULLs.
+  # `compact` removes all user-provided NULLs.
   # `utils::modifyList` then merges the non-NULL user arguments over the defaults.
   # This correctly implements the desired behavior: a user's NULL does NOT
   # overwrite a non-NULL default like `list()` or `character(0)`.
-  utils::modifyList(DEFAULT_ARGS_MAP, purrr::compact(user_args))
+  utils::modifyList(DEFAULT_ARGS_MAP, compact(user_args))
 }
 
 
@@ -130,9 +130,9 @@
   )
 
   # Programmatically create the list of overrides from the map
-  purrr::map(arg_to_recipe_map, ~ user_args[[.x]]) |>
+  map(arg_to_recipe_map, ~ user_args[[.x]]) |>
     stats::setNames(names(arg_to_recipe_map)) |>
-    purrr::compact() # `compact` removes NULLs, so only user-set arguments are returned
+    compact() # `compact` removes NULLs, so only user-set arguments are returned
 }
 
 
@@ -174,8 +174,8 @@
   # Convert the rules table into a list of rows for efficient iteration.
   rules_list <- split(active_rules, f = seq_len(nrow(active_rules)))
 
-  # Use purrr::reduce to apply each rule in sequence.
-  font_sizes <- purrr::reduce(
+  # Use reduce to apply each rule in sequence.
+  font_sizes <- reduce(
     .x = rules_list,
     .f = ~ .apply_text_size_rule(.x, .y, user_args),
     .init = list()
@@ -185,7 +185,7 @@
 
   # Wrap the flat list of font sizes into the nested list structure
   # required for the `style_overrides` recipe key.
-  list(style_overrides = purrr::map(font_sizes, ~ list(fontsize = .x)))
+  list(style_overrides = map(font_sizes, ~ list(fontsize = .x)))
 }
 
 
@@ -219,9 +219,9 @@
 #' @keywords internal
 #' @noRd
 .merge_recipes <- function(...) {
-  # `purrr::compact` removes any NULL lists (e.g., if fontsize_overrides is NULL)
-  # `purrr::reduce` then iteratively applies `modifyList` to the sequence.
-  purrr::reduce(purrr::compact(list(...)), utils::modifyList)
+  # `compact` removes any NULL lists (e.g., if fontsize_overrides is NULL)
+  # `reduce` then iteratively applies `modifyList` to the sequence.
+  reduce(compact(list(...)), utils::modifyList)
 }
 
 

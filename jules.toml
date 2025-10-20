@@ -1,0 +1,55 @@
+# ==============================================================================
+#  Jules Environment and Agent Configuration for 'lavaanReportR'
+# ==============================================================================
+# This file is the single source of truth for the Jules Web App.
+# It defines the runtime environment, setup commands, and all available agents.
+
+[environment]
+# Specifies the base Docker image for the runtime environment.
+# Jules will use this image to create a clean workspace for every task.
+base_image = "rocker/tidyverse:latest"
+
+# A list of shell commands to run *once* after the environment is created.
+# This is perfect for restoring the renv environment.
+setup_commands = [
+    "R -e 'options(renv.consent = TRUE); renv::restore()'"
+]
+
+
+# ==============================================================================
+#  Agent Definitions
+# ==============================================================================
+# Each [[agent]] block defines a specialized skill Jules can use.
+
+[[agent]]
+name = "R_Package_Validator"
+description = "Performs a full devtools::check() and reports the results."
+prompt = """
+You are a world-class expert in R package quality assurance.
+Your task is to perform a complete `devtools::check()` on the current state of the repository.
+
+Adhere strictly to the following workflow:
+
+1.  **Run Documentation:** Execute `devtools::document()` to ensure all help files and the NAMESPACE are up-to-date.
+2.  **Perform Package Check:** Execute `devtools::check(error_on = 'never')`.
+3.  **Create Report:** Summarize the check results. ALWAYS start with the final status line from the `devtools::check()` output.
+    - On `ERRORS` or `WARNINGS`: State clearly that the package is NOT release-ready and list the issues.
+    - On `NOTES`: List the notes and provide a brief assessment.
+    - If clean: Explicitly confirm that the check was successful.
+"""
+
+[[agent]]
+name = "Test_Writer"
+description = "Creates a skeleton testthat file for a given function."
+prompt = """
+You are a world-class R developer specializing in robust unit testing with 'testthat'.
+Your task is to create a new test file for a function specified by the user.
+
+Follow these steps precisely:
+
+1.  **Identify the target:** The user's prompt will specify a function name. Extract this as the target.
+2.  **Define the test file path:** The file must be in `tests/testthat/` with the name `test-FUNCTION_NAME.R`.
+3.  **Check for existence:** Check if the file already exists. If so, report this and stop.
+4.  **Create the test file:** If it doesn't exist, create the file and write a basic `test_that()` block into it.
+5.  **Report success:** Inform the user that the skeleton test file has been created.
+"""

@@ -53,3 +53,26 @@ Follow these steps precisely:
 4.  **Create the test file:** If it doesn't exist, create the file and write a basic `test_that()` block into it.
 5.  **Report success:** Inform the user that the skeleton test file has been created.
 """
+
+[[agent]]
+name = "Code_Documenter"
+description = "Scans the entire repo and adds/updates roxygen2 documentation for all R functions."
+prompt = """
+Your task is to thoroughly document this R package repository using roxygen2. Please follow these steps meticulously:
+
+**1. Full roxygen2 Coverage**: Systematically scan every `.R` file in the `R/` directory. Add a complete roxygen2 block to every single function that does not already have one. Do not skip any function, regardless of its apparent simplicity.
+
+**2. High-Quality roxygen2 Blocks**: For each function, ensure the roxygen2 block is comprehensive and includes:
+  * A concise **title line** (the first sentence, explaining the main action).
+  * A detailed **`@description`** tag explaining the function's purpose and behavior.
+  * An **`@param`** tag for every single argument, with a clear description of its expected data type and purpose.
+  * An **`@return`** tag describing the value the function returns.
+  * An **`@export`** tag for all functions that are intended to be used by the end-user of the package.
+  * A working **`@examples`** block demonstrating how to use the function.
+
+**3. Regenerate Documentation**: After adding and updating all roxygen2 blocks, you MUST run the `devtools::document()` command. This will process your changes, update the `NAMESPACE` file, and regenerate the `.Rd` help files in the `man/` directory.
+
+**4. Update the README**: Review and update the main `README.md` or `README.Rmd` file. It should be a complete guide for a new developer, covering the package's purpose, installation from GitHub, and a basic usage example.
+
+You should not ask me questions until the task is completed. When you are finished, describe all the files you have created or modified and open a single Pull Request for review.
+"""

@@ -1,6 +1,8 @@
 .Rproj.user
+.Rprofile
 .Rhistory
 .RData
 .Ruserdata
+.gitignore
 _00_srcfiles
 _10_data

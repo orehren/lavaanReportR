@@ -1,27 +1,35 @@
 # Start from a base image that already has R installed.
-# The 'rocker' project provides excellent, versioned R images.
+# Using the same version for consistency.
 FROM rocker/r-ver:4.3.1
 
-# Install any system-level dependencies your R packages might need.
-# For example, DiagrammeR sometimes needs graphviz.
+# Install system-level dependencies that might be required by the R packages.
+# These are common dependencies for packages that compile from source.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev \
     libssl-dev \
     libxml2-dev \
     graphviz
 
-# Copy your package source code into the container.
-COPY . /lavaanReportR
+# --- renv Restore Phase ---
+# First, copy only the files necessary for renv to restore the environment.
+# This allows Docker to cache this layer effectively. If these files don't change,
+# the expensive package installation step won't be re-run.
 WORKDIR /lavaanReportR
+COPY renv.lock .
+COPY .Rprofile .
+COPY renv/activate.R renv/
+COPY renv/settings.dcf renv/
 
-# Install the R packages required by your project.
-# This command uses the 'remotes' package to read the DESCRIPTION file
-# and install all listed dependencies (Imports and Suggests).
-RUN R -e "install.packages('remotes', repos = 'https://cloud.r-project.org/')"
-RUN R -e "remotes::install_deps(dependencies = TRUE)"
+# Install renv and restore the project's R dependencies from the lockfile.
+# This will install the exact versions of packages specified in renv.lock.
+RUN R -e "install.packages('renv', repos = 'https://cloud.r-project.org/')"
+RUN R -e "renv::restore()"
 
-# Finally, install your local package itself.
-RUN R CMD INSTALL .
+# --- Application Code Phase ---
+# Now that dependencies are installed, copy the rest of the application code.
+COPY . .
 
-# Set the working directory again in case R CMD INSTALL changed it.
-WORKDIR /lavaanReportR
+# Finally, install the local package itself into the renv library.
+RUN R -e "renv::install(project = '.', rebuild = TRUE)"
+
+# The WORKDIR is already set, so this is the final state.

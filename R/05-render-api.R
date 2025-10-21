@@ -2,16 +2,27 @@
 # SECTION: WORKFLOW - ANALYSIS PHASE
 # ==============================================================================
 
-#' @describeIn analyze Method for `lavaan_parameter_table` objects.
-#' @description This method performs the "analysis" phase of the workflow. It
-#'   calls specialized analysis functions to extract structured information about
-#'   the model's nodes, edges, defined paths, and overall features.
-#'
-#' @param x An object of class `lavaan_parameter_table`.
+#' @title Analyze Model Structure
+#' @description This is the first phase of the `lavaanReportR` workflow. The `analyze`
+#'   function takes a `lavaan_parameter_table` object and extracts all
+#'   essential structural information. It identifies nodes, edges, model features
+#'   (e.g., multigroup, multilevel, LGM), and calculates the hierarchical layout.
+#' @details
+#' The analysis phase is crucial for understanding the model's topology before
+#' any styling or plotting decisions are made. It produces a `lavaan_model_structure`
+#' object, which serves as the input for the `configure_plot` phase.
+#' @seealso \code{\link{configure_plot}}, \code{\link{prepare}}, \code{\link{build}}, \code{\link{render}}
+#' @param x An object of class \code{lavaan_parameter_table}.
 #' @param ... Additional arguments (not used).
-#'
-#' @return An object of class `lavaan_model_structure`.
+#' @return An object of class \code{lavaan_model_structure}, containing the
+#'   analyzed components of the model (nodes, edges, features, layout).
 #' @exportS3Method lavaanReportR::analyze
+#' @examples
+#' \dontrun{
+#'   # Assuming 'fit' is a lavaan object
+#'   param_table <- lavaan::parameterEstimates(fit)
+#'   analyzed_model <- analyze(param_table)
+#' }
 analyze.lavaan_parameter_table <- function(x, ...) {
   param_table <- x
 
@@ -48,38 +59,48 @@ analyze.lavaan_parameter_table <- function(x, ...) {
 # SECTION: WORKFLOW - CONFIGURATION PHASE
 # ==============================================================================
 
-#' @describeIn configure_plot Method for `lavaan_model_structure` objects.
-#' @description This method orchestrates the entire process of creating the
-#'   final `lavaan_plot_config` object. It takes the analysis results from the
-#'   `analyze` phase and combines them with all user-configurable arguments to
-#'   produce the final, validated blueprint for plotting.
-#'
-#' @param x An object of class `lavaan_model_structure`.
+#' @title Configure Plot Aesthetics and Settings
+#' @description This is the second phase of the `lavaanReportR` workflow. The
+#'   `configure_plot` function takes the `lavaan_model_structure` object from the
+#'   `analyze` phase and applies all user-defined settings and aesthetic choices.
+#'   It merges default recipes with user overrides to create a final, validated
+#'   `lavaan_plot_config` object.
+#' @details
+#' This function acts as the central control panel for customizing the plot's
+#' appearance. All arguments are optional and will fall back to sensible defaults.
+#' The result is a complete configuration blueprint that guides the `prepare` phase.
+#' @seealso \code{\link{analyze}}, \code{\link{prepare}}, \code{\link{build}}, \code{\link{render}}
+#' @param x An object of class \code{lavaan_model_structure}.
 #' @param estimates_to_show A character string specifying which estimates to use.
 #'   Can be `"standardized"`, `"unstandardized"`, or `"none"`.
 #' @param recipe A user-defined list to override default recipe settings.
 #' @param show_plot_elements A character vector to selectively render elements.
 #'   Can contain `"intercepts"`, `"variances"`, `"covariances"`.
 #' @param plot_flow_direction A character string to set the plot layout direction.
-#'   Can be `"TB"` or `"LR"`.
-#' @param show_sig A logical value to show/hide significance stars.
+#'   Can be `"TB"` (top-to-bottom) or `"LR"` (left-to-right).
+#' @param show_sig A logical value to show/hide significance stars (e.g., "*").
 #' @param show_estimates_above A numeric threshold for displaying estimates.
+#'   Values below this are hidden.
 #' @param text_size_global A global font size for all plot elements.
 #' @param text_size_nodes A font size for all node types.
 #' @param text_size_edges A font size for all edge types.
-#' @param text_size_details A named list for specific font size overrides.
-#' @param show_legend A logical value to show/hide the legend.
-#' @param show_legend_with_effects A logical value to include derived effects in the legend.
-#' @param multilevel_multigroup_order A character vector specifying nesting order,
-#'   must contain `"group"` and `"level"`.
-#' @param node_labels A named list for relabeling nodes.
+#' @param text_size_details A named list for specific font size overrides (e.g.,
+#'   `list(variances = 8)`).
+#' @param multilevel_multigroup_order A character vector specifying nesting order
+#'   for complex models, must contain `"group"` and `"level"`.
+#' @param node_labels A named list for relabeling nodes (e.g., `list(Y1 = "Outcome")`).
 #' @param effect_labels A named list for relabeling user-defined path labels.
-#' @param render A logical value. If `FALSE`, the final call to `render()` will
-#'   return DOT code instead of a plot.
 #' @param ... Not used.
 #'
 #' @return The final, validated, and complete `lavaan_plot_config` object.
 #' @exportS3Method lavaanReportR::configure_plot
+#' @examples
+#' \dontrun{
+#'   # Assuming 'analyzed_model' is from the analyze() step
+#'   plot_config <- configure_plot(analyzed_model,
+#'                                 plot_flow_direction = "LR",
+#'                                 text_size_global = 12)
+#' }
 configure_plot.lavaan_model_structure <- function(x,
                                                   estimates_to_show = NULL,
                                                   recipe = NULL,
@@ -127,15 +148,26 @@ configure_plot.lavaan_model_structure <- function(x,
 # SECTION: WORKFLOW - PREPARATION PHASE
 # ==============================================================================
 
-#' @describeIn prepare Method for `lavaan_plot_config` objects.
-#' @description This method takes the final configuration and orchestrates the
-#'   full enrichment of the parameter table, creating the final data blueprint
-#'   required by the build phase. This is the "prepare" phase of the main workflow.
-#' @param x An object of class `lavaan_plot_config`.
+#' @title Prepare Final Data for Plotting
+#' @description This is the third phase of the `lavaanReportR` workflow. The
+#'   `prepare` function takes the `lavaan_plot_config` object and applies all
+#'   styling, labeling, and filtering rules to produce the final, "build-ready"
+#'   data tables for nodes and edges.
+#' @details
+#' This phase is the final data transformation step. It enriches the analyzed
+#' model structure with the aesthetic settings from the configuration, resulting
+#' in a `lavaan_graph` object that contains everything needed to build the DOT code.
+#' @seealso \code{\link{analyze}}, \code{\link{configure_plot}}, \code{\link{build}}, \code{\link{render}}
+#' @param x An object of class \code{lavaan_plot_config}.
 #' @param ... Not used.
-#' @return A `lavaan_prepared_data` object containing the enriched parameter table
-#'   and other necessary components for the build phase.
+#' @return A \code{lavaan_graph} object containing the final, build-ready
+#'   data.tables for nodes and edges, along with the final recipe.
 #' @exportS3Method lavaanReportR::prepare
+#' @examples
+#' \dontrun{
+#'   # Assuming 'plot_config' is from the configure_plot() step
+#'   prepared_graph <- prepare(plot_config)
+#' }
 prepare.lavaan_plot_config <- function(x, ...) {
   config <- x
 
@@ -160,13 +192,24 @@ prepare.lavaan_plot_config <- function(x, ...) {
 # SECTION: WORKFLOW - BUILD PHASE (FINAL VERSION)
 # ==============================================================================
 
-#' @describeIn build Method for `lavaan_graph` objects.
-#' @description Takes the final `lavaan_graph` object and assembles the complete
-#'   DOT code string using vectorized operations.
-#' @param x An object of class `lavaan_graph`.
+#' @title Build DOT Code for Graphviz
+#' @description This is the fourth phase of the `lavaanReportR` workflow. The
+#'   `build` function takes the `lavaan_graph` object and constructs the complete
+#'   DOT language string required by Graphviz to render the path diagram.
+#' @details
+#' This function is a "dumb assembler." It translates the prepared data tables
+#' into DOT statements without making any further decisions. The output is a
+#' `lavaan_dot_code` object, which is a simple wrapper around the final DOT code string.
+#' @seealso \code{\link{analyze}}, \code{\link{configure_plot}}, \code{\link{prepare}}, \code{\link{render}}
+#' @param x An object of class \code{lavaan_graph}.
 #' @param ... Not used.
-#' @return A `lavaan_dot_code` object containing the final DOT string.
+#' @return A \code{lavaan_dot_code} object containing the final DOT string.
 #' @exportS3Method lavaanReportR::build
+#' @examples
+#' \dontrun{
+#'   # Assuming 'prepared_graph' is from the prepare() step
+#'   dot_code <- build(prepared_graph)
+#' }
 build.lavaan_graph <- function(x, ...) {
   graph_obj <- x
 
@@ -198,13 +241,26 @@ build.lavaan_graph <- function(x, ...) {
 # SECTION: WORKFLOW - RENDER PHASE
 # ==============================================================================
 
-#' @describeIn render Method for `lavaan_dot_code` objects.
-#' @description Takes the final DOT code and renders it into a graph object
-#'   using the `DiagrammeR` package.
-#' @param x An object of class `lavaan_dot_code`.
+#' @title Render the Final Plot
+#' @description This is the final phase of the `lavaanReportR` workflow. The
+#'   `render` function takes the `lavaan_dot_code` object and uses the `DiagrammeR`
+#'   package to render the final graph.
+#' @details
+#' This is the simplest phase of the workflow. It acts as a lightweight wrapper
+#' around `DiagrammeR::grViz()`, passing the generated DOT code to be rendered
+#' into a final plot object.
+#' @seealso \code{\link{analyze}}, \code{\link{configure_plot}}, \code{\link{prepare}}, \code{\link{build}}
+#' @param x An object of class \code{lavaan_dot_code}.
 #' @param ... Not used.
-#' @return A `dgr_graph` object from `DiagrammeR`.
+#' @return A \code{dgr_graph} object from the `DiagrammeR` package.
 #' @exportS3Method lavaanReportR::render
+#' @examples
+#' \dontrun{
+#'   # Assuming 'dot_code' is from the build() step
+#'   final_plot <- render(dot_code)
+#'   # The plot can now be displayed
+#'   final_plot
+#' }
 render.lavaan_dot_code <- function(x, ...) {
   # Die "dümmste" Phase: Nur noch den String an die Render-Engine übergeben.
   DiagrammeR::grViz(x$dot_code)

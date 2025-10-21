@@ -1,8 +1,9 @@
 # Start from a base image that already has R installed.
 # Using the same version for consistency.
-FROM rocker/r-ver:4.3.1
+FROM rocker/r-ver:4.5.1
 
-# Install system-level dependencies that might be required by the R packages.
+RUN echo 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/latest", CRAN = "https://cloud.r-project.org"))' >>"${R_HOME}/etc/Rprofile.site"
+
 # These are common dependencies for packages that compile from source.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev \

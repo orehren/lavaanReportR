@@ -31,3 +31,4 @@ Suggests:
     rmarkdown
 URL: https://github.com/orehren/lavaanReportR
 BugReports: https://github.com/orehren/lavaanReportR/issues
+RoxygenNote: 7.3.3

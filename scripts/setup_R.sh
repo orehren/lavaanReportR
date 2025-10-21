@@ -21,9 +21,9 @@ source /etc/os-release
 function apt_install() {
     if ! dpkg -s "$@" >/dev/null 2>&1; then
         if [ "$(find /var/lib/apt/lists/* | wc -l)" = "0" ]; then
-            apt-get update
+            sudo apt-get update
         fi
-        apt-get install -y --no-install-recommends "$@"
+        sudo apt-get install -y --no-install-recommends "$@"
     fi
 }
 
@@ -31,7 +31,7 @@ function apt_install() {
 CRAN_SOURCE=${CRAN/"__linux__/${UBUNTU_CODENAME}/"/""}
 
 ## Add a default CRAN mirror
-echo "options(repos = c(CRAN = '${CRAN}'), download.file.method = 'libcurl')" >>"${R_HOME}/etc/Rprofile.site"
+echo "options(repos = c(CRAN = '${CRAN}'), download.file.method = 'libcurl')" | sudo tee -a "${R_HOME}/etc/Rprofile.site"
 
 ## Set HTTPUserAgent for RSPM (https://github.com/rocker-org/rocker/issues/400)
 cat <<EOF >>"${R_HOME}/etc/Rprofile.site"
@@ -43,7 +43,7 @@ EOF
 ## https://github.com/rocker-org/rocker-versioned2/issues/390
 if ! dpkg -l | grep -q libopenblas-dev; then
     apt_install libopenblas-dev
-    update-alternatives --set "libblas.so.3-${ARCH}-linux-gnu" "/usr/lib/${ARCH}-linux-gnu/openblas-pthread/libblas.so.3"
+    sudo update-alternatives --set "libblas.so.3-${ARCH}-linux-gnu" "/usr/lib/${ARCH}-linux-gnu/openblas-pthread/libblas.so.3"
 fi
 
 ## Install littler
@@ -57,7 +57,7 @@ if [ ! -x "$(command -v r)" ]; then
         libicu-dev"
 
     if [ "$(find /var/lib/apt/lists/* | wc -l)" = "0" ]; then
-        apt-get update
+        sudo apt-get update
     fi
     # shellcheck disable=SC2086
     apt_install ${BUILDDEPS}
@@ -66,25 +66,25 @@ if [ ! -x "$(command -v r)" ]; then
     # Clean up
     # shellcheck disable=SC2086
     if [ "${PURGE_BUILDDEPS}" != "false" ]; then
-        apt-get remove --purge -y ${BUILDDEPS}
+        sudo apt-get remove --purge -y ${BUILDDEPS}
     fi
-    apt-get autoremove -y
-    apt-get autoclean -y
+    sudo apt-get autoremove -y
+    sudo apt-get autoclean -y
 fi
 
 ## Symlink littler and littler's installation scripts
-ln -sf "${R_HOME}/site-library/littler/bin/r" /usr/local/bin/r
-ln -sf "${R_HOME}/site-library/littler/examples/installGithub.r" /usr/local/bin/installGithub.r
+sudo ln -sf "${R_HOME}/site-library/littler/bin/r" /usr/local/bin/r
+sudo ln -sf "${R_HOME}/site-library/littler/examples/installGithub.r" /usr/local/bin/installGithub.r
 
 ## Use rocker scripts version install2.r if it exists
 if [ -f "/rocker_scripts/bin/install2.r" ]; then
-    ln -sf /rocker_scripts/bin/install2.r /usr/local/bin/install2.r
+    sudo ln -sf /rocker_scripts/bin/install2.r /usr/local/bin/install2.r
 else
-    ln -sf "${R_HOME}/site-library/littler/examples/install2.r" /usr/local/bin/install2.r
+    sudo ln -sf "${R_HOME}/site-library/littler/examples/install2.r" /usr/local/bin/install2.r
 fi
 
 # Clean up
-rm -rf /var/lib/apt/lists/*
+sudo rm -rf /var/lib/apt/lists/*
 
 # Check the R info
 echo -e "Check the littler info...\n"

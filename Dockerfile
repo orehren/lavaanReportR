@@ -19,11 +19,11 @@ WORKDIR /lavaanReportR
 COPY renv.lock .
 COPY .Rprofile .
 COPY renv/activate.R renv/
-COPY renv/settings.dcf renv/
+COPY renv/settings.json renv/
 
 # Install renv and restore the project's R dependencies from the lockfile.
 # This will install the exact versions of packages specified in renv.lock.
-RUN R -e "install.packages('renv', repos = 'https://cloud.r-project.org/')"
+RUN R -e "install.packages('renv')"
 RUN R -e "renv::restore()"
 
 # --- Application Code Phase ---

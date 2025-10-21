@@ -4,5 +4,6 @@
 .RData
 .Ruserdata
 .gitignore
+.Rhistory
 _00_srcfiles
 _10_data

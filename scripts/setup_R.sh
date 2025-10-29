@@ -192,6 +192,7 @@ sudo apt-get -qq update && sudo apt-get -qq upgrade
 # These are the core dependencies for R and the installer tools.
 # gdebi-core is needed by install-rstudio.sh and install-quarto.sh
 packages_to_install=(
+    software-properties-common
     ca-certificates
     less
     locales
@@ -224,8 +225,12 @@ apt_install "${packages_to_install[@]}"
 # --- End of base package installation ---
 
 # Add the CRAN GPG key and repository
-wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | sudo tee /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
-sudo add-apt-repository -y "deb https://cloud.r-project.org/bin/linux/ubuntu noble-cran40/"
+# wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | sudo tee /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
+# sudo add-apt-repository -y "deb https://cloud.r-project.org/bin/linux/ubuntu noble-cran40/"
+wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | sudo tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
+# add the repo from CRAN -- lsb_release adjusts to 'noble' or 'jammy' or ... as needed
+sudo add-apt-repository "deb https://cloud.r-project.org/bin/linux/ubuntu $(lsb_release -cs)-cran40/"
+
 sudo apt-get -qq update
 
 # ==============================================================================

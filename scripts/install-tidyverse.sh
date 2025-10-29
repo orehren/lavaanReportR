@@ -38,7 +38,7 @@ echo "Info: Installing core R packages (tidyverse, devtools, db backends)..."
 # 3. Skips missing packages (by checking availability)
 # 4. Uses the repositories from Rprofile.site (automatically)
 
-Rscript - <<EOF
+sudo Rscript - <<EOF
 # --- Setup ---
 # 1. Set parallel cores
 ncpus <- as.integer(Sys.getenv("NCPUS", "-1"))

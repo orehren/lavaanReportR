@@ -19,17 +19,26 @@ apt_install "${rstudio_packages[@]}"
 DOWNLOAD_FILE="rstudio-server.deb"
 export UBUNTU_CODENAME=$(lsb_release -cs)
 
-# --- 3. Download Logic (REVISED) ---
+# --- 3. Download Logic (REVISED AND FIXED) ---
 
 # Alias for user-friendliness
 if [ "$RSTUDIO_VERSION" = "latest" ]; then
     RSTUDIO_VERSION="stable"
 fi
 
-# --- Rocker Compatibility Shims ---
-# These shims map Ubuntu versions to the versions RStudio actually builds for.
+# --- NEW: Architecture Mapping ---
+# Map system arch (x86_64) to RStudio's naming (amd64)
+if [ "$ARCH" = "x86_64" ]; then
+    RSTUDIO_ARCH="amd64"
+elif [ "$ARCH" = "aarch64" ]; then
+    RSTUDIO_ARCH="arm64"
+else
+    echo "Error: Unsupported architecture for RStudio: $ARCH" >&2
+    exit 1
+fi
 
-# NEW: RStudio Server for noble (24.04) uses the jammy (22.04) packages.
+# --- Rocker Compatibility Shims ---
+# RStudio Server for noble (24.04) uses the jammy (22.04) packages.
 if [ "$UBUNTU_CODENAME" = "noble" ]; then
     echo "Info: Mapping 'noble' to 'jammy' for RStudio Server download."
     UBUNTU_CODENAME="jammy"
@@ -40,24 +49,19 @@ if [ "$UBUNTU_CODENAME" = "focal" ]; then
     UBUNTU_CODENAME="bionic"
 fi
 
-echo "Info: Downloading RStudio $RSTUDIO_VERSION for $UBUNTU_CODENAME ($ARCH)..."
+echo "Info: Downloading RStudio $RSTUDIO_VERSION for $UBUNTU_CODENAME ($RSTUDIO_ARCH)..."
+
+# --- FIXED URLS ---
 
 # Download logic for stable/preview/daily
 if [ "$RSTUDIO_VERSION" = "stable" ] || [ "$RSTUDIO_VERSION" = "preview" ] || [ "$RSTUDIO_VERSION" = "daily" ]; then
-
-    # Shim for stable builds: RStudio dropped bionic, use focal instead
-    # This reverses the 'focal' -> 'bionic' shim from above for stable builds
     if [ "$UBUNTU_CODENAME" = "bionic" ]; then
         UBUNTU_CODENAME="focal"
     fi
-
-    wget "https://rstudio.org/download/latest/${RSTUDIO_VERSION}/server/${UBUNTU_CODENAME}/rstudio-server-latest-${ARCH}.deb" -O "$DOWNLOAD_FILE"
-
-# Download logic for specific version numbers
+    wget "https://rstudio.org/download/latest/${RSTUDIO_VERSION}/server/${UBUNTU_CODENAME}/rstudio-server-latest-${RSTUDIO_ARCH}.deb" -O "$DOWNLOAD_FILE"
 else
-    # This part uses the original shims (e.g., focal->bionic)
-    wget "https://download2.rstudio.org/server/${UBUNTU_CODENAME}/${ARCH}/rstudio-server-${RSTUDIO_VERSION/"+"/"-"}-${ARCH}.deb" -O "$DOWNLOAD_FILE" || \
-        wget "https://s3.amazonaws.com/rstudio-ide-build/server/${UBUNTU_CODENAME}/${ARCH}/rstudio-server-${RSTUDIO_VERSION/"+"/"-"}-${ARCH}.deb" -O "$DOWNLOAD_FILE"
+    wget "https://download2.rstudio.org/server/${UBUNTU_CODENAME}/${RSTUDIO_ARCH}/rstudio-server-${RSTUDIO_VERSION/"+"/"-"}-${RSTUDIO_ARCH}.deb" -O "$DOWNLOAD_FILE" ||
+        wget "https://s3.amazonaws.com/rstudio-ide-build/server/${UBUNTU_CODENAME}/${RSTUDIO_ARCH}/rstudio-server-${RSTUDIO_VERSION/"+"/"-"}-${RSTUDIO_ARCH}.deb" -O "$DOWNLOAD_FILE"
 fi
 
 # --- 4. Install ---
@@ -66,11 +70,12 @@ sudo gdebi --non-interactive "$DOWNLOAD_FILE"
 rm "$DOWNLOAD_FILE"
 
 # --- 5. Post-Install Configuration ---
+# (This section is unchanged)
 echo "Info: Configuring RStudio Server..."
-ln -fs /usr/lib/rstudio-server/bin/rstudio-server /usr/local/bin
-ln -fs /usr/lib/rstudio-server/bin/rserver /usr/local/bin
-rm -f /var/lib/rstudio-server/secure-cookie-key
-mkdir -p /etc/R
+sudo ln -fs /usr/lib/rstudio-server/bin/rstudio-server /usr/local/bin
+sudo ln -fs /usr/lib/rstudio-server/bin/rserver /usr/local/bin
+sudo rm -f /var/lib/rstudio-server/secure-cookie-key
+sudo mkdir -p /etc/R
 R_BIN="$(which R)"
 echo "rsession-which-r=${R_BIN}" | sudo tee /etc/rstudio/rserver.conf > /dev/null
 echo "lock-type=advisory" | sudo tee /etc/rstudio/file-locks > /dev/null

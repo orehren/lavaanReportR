@@ -342,7 +342,7 @@ rm -rf /tmp/downloaded_packages
 if [[ -d "/usr/local/lib/R/site-library" ]]; then
     echo "Stripping R package binaries..."
     # Find .so files and ignore errors if none are found
-    find /usr/local/lib/R/site-library -type f -name "*.so" -exec strip {} + 2>/dev/null || true
+    sudo find /usr/local/lib/R/site-library -type f -name "*.so" -exec strip {} + 2>/dev/null || true
 fi
 
 echo "--- Setup Complete ---"

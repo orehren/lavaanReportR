@@ -1,8 +1,22 @@
 # ==============================================================================
 # SECTION: CONFIGURATION HELPERS
 # ==============================================================================
+# This section contains functions that manage the plot configuration. The core
+# idea is a "recipe" system where a base recipe is chosen based on the model
+# type, and then layers of user customizations are merged on top. This creates
+# a flexible and powerful system for controlling the plot's appearance.
+#
+# The merge hierarchy is as follows (higher numbers override lower ones):
+# 1. Base Recipe (determined by model type)
+# 2. User-provided Recipe (the `recipe` argument)
+# 3. Direct Argument Overrides (e.g., `show_estimates`)
+# 4. Fontsize Overrides (the `text_size_*` arguments)
+# 5. Model Hierarchy (determined by features and user arguments)
+# ==============================================================================
 
-# --- Normalization Helpers ---
+# ------------------------------------------------------------------------------
+# Normalization and Validation
+# ------------------------------------------------------------------------------
 
 #' @title Normalize Raw User Arguments
 #' @description Programmatically applies tolerant normalization using `match.arg`
@@ -15,22 +29,18 @@
 #' @keywords internal
 #' @noRd
 .normalize_user_args <- function(user_args) {
-  # Iterate over the arguments defined in our normalization map.
+  # This loop ensures that user arguments like `plot_flow_direction = "LR"`
+  # are correctly matched to the full `left-to-right` value.
   for (arg_name in names(NORMALIZATION_MAP)) {
-    # Guard Clause: If the user has not provided this argument, skip to the next.
     if (is.null(user_args[[arg_name]])) {
       next
     }
 
-    # Extract the rule and the user-provided value.
     rule <- NORMALIZATION_MAP[[arg_name]]
     arg_val <- user_args[[arg_name]]
 
-    # Attempt to normalize the value using match.arg.
-    # The tryCatch block ensures that any error from match.arg (e.g., invalid
-    # choice, ambiguous partial match) is caught. In case of an error, we
-    # intentionally do nothing, passing the original, invalid value to the
-    # next stage (validation), which will then generate a user-friendly error.
+    # A tryCatch block gracefully handles cases where `match.arg` would fail,
+    # passing the invalid input to the validation phase for a user-friendly error.
     tryCatch(
       {
         user_args[[arg_name]] <- match.arg(
@@ -42,7 +52,6 @@
       error = function(e) {}
     )
   }
-
   return(user_args)
 }
 
@@ -56,15 +65,11 @@
 #' @keywords internal
 #' @noRd
 .apply_user_arg_defaults <- function(user_args) {
-  # `compact` removes all user-provided NULLs.
-  # `utils::modifyList` then merges the non-NULL user arguments over the defaults.
-  # This correctly implements the desired behavior: a user's NULL does NOT
-  # overwrite a non-NULL default like `list()` or `character(0)`.
+  # `compact` removes all user-provided NULLs. `modifyList` then merges the
+  # non-NULL user arguments over the defaults. This ensures that a user's NULL
+  # does not overwrite a non-NULL default.
   utils::modifyList(DEFAULT_ARGS_MAP, compact(user_args))
 }
-
-
-# --- Validation Wrapper ---
 
 
 #' @title Validate User Arguments
@@ -74,6 +79,8 @@
 #' @return The `user_args` list, passed through invisibly if validation succeeds.
 #' @keywords internal
 .validate_user_args <- function(user_args, data_context) {
+  # This function centralizes the call to the validation engine, ensuring
+  # all arguments are checked against the defined rules.
   validation_call_args <- c(
     user_args,
     list(data_object = data_context, data_object_type = "sem_plot")
@@ -83,8 +90,9 @@
 }
 
 
-# --- Recipe Assembly Helpers ---
-
+# ------------------------------------------------------------------------------
+# Recipe Assembly Helpers
+# ------------------------------------------------------------------------------
 
 #' @title Build Base Recipe Component
 #' @description Selects the correct default recipe from the global `recipe_list`
@@ -93,8 +101,7 @@
 #' @return A list representing the base recipe.
 #' @keywords internal
 .build_base_recipe <- function(features) {
-  # This function assumes a global `recipe_list` object exists.
-  # We will need to create this object from `data-raw/plot_recipes.R`.
+  # The base recipe provides the foundational set of styles for the plot.
   recipe_list[[features$model_type]]
 }
 
@@ -107,20 +114,20 @@
 #' @keywords internal
 #' @noRd
 .build_user_recipe <- function(user_args) {
+  # This allows advanced users to provide a completely custom set of styles.
   user_args$recipe %||% list()
 }
 
 
 #' @title Build Direct Argument Overrides Component
 #' @description Programmatically collects simple, direct argument overrides
-#'   (e.g., `show_estimates`) into a list. These have the highest priority in the merge.
+#'   (e.g., `show_estimates`) into a list. These have a high priority in the merge.
 #' @param user_args A list of user arguments.
 #' @return A list containing only the direct override values set by the user.
 #' @keywords internal
 #' @noRd
 .build_direct_overrides <- function(user_args) {
-  # This map defines which user argument corresponds to which recipe key.
-  # It makes the function scalable and easy to maintain.
+  # This map translates function arguments into their corresponding recipe keys.
   arg_to_recipe_map <- c(
     "show_plot_elements" = "render_elements",
     "plot_flow_direction" = "rankdir",
@@ -129,10 +136,10 @@
     "show_estimates_above" = "show_estimates_above"
   )
 
-  # Programmatically create the list of overrides from the map
+  # `compact` removes NULLs, so only user-set arguments are returned.
   map(arg_to_recipe_map, ~ user_args[[.x]]) |>
     stats::setNames(names(arg_to_recipe_map)) |>
-    compact() # `compact` removes NULLs, so only user-set arguments are returned
+    compact()
 }
 
 
@@ -144,37 +151,22 @@
 #' @keywords internal
 #' @noRd
 .build_fontsize_overrides <- function(user_args) {
-  # --- 1. Identify which rules are TRULY active (i.e., not NA) ---
-
-  # Get the subset of user arguments that are text size arguments
+  # --- 1. Identify active text size arguments ---
   text_size_args <- user_args[names(user_args) %in% TEXT_SIZE_RULE_MAP$arg_name]
-
-  # Filter out any arguments that are NA. This is the core of the fix.
-  # We only consider arguments that have a non-NA value.
   active_text_args <- Filter(function(x) !is.na(x), text_size_args)
-
-  # Get the names of the arguments that were actually set by the user.
   active_arg_names <- names(active_text_args)
 
-  # Guard Clause: Exit early if no non-NA arguments were provided.
   if (length(active_arg_names) == 0) {
     return(NULL)
   }
 
   # --- 2. Prepare and sort the active rules for processing ---
-
-  # Filter the rule map to get only the active rules.
+  # Sorting by priority ensures that more specific settings override general ones.
   active_rules <- TEXT_SIZE_RULE_MAP[arg_name %in% active_arg_names]
-
-  # Sort the rules by priority to ensure correct override behavior.
   data.table::setorderv(active_rules, "priority")
 
   # --- 3. Apply the rules sequentially to build the final font size list ---
-
-  # Convert the rules table into a list of rows for efficient iteration.
   rules_list <- split(active_rules, f = seq_len(nrow(active_rules)))
-
-  # Use reduce to apply each rule in sequence.
   font_sizes <- reduce(
     .x = rules_list,
     .f = ~ .apply_text_size_rule(.x, .y, user_args),
@@ -182,9 +174,7 @@
   )
 
   # --- 4. Format the final output ---
-
-  # Wrap the flat list of font sizes into the nested list structure
-  # required for the `style_overrides` recipe key.
+  # The final list is nested under `style_overrides` to match the recipe structure.
   list(style_overrides = map(font_sizes, ~ list(fontsize = .x)))
 }
 
@@ -196,7 +186,7 @@
 #' @return A list containing only the `$split_hierarchy`.
 #' @keywords internal
 .build_model_hierarchy <- function(features, user_args) {
-  # Use the clean fcase logic to determine the hierarchy
+  # This logic determines how to nest plots for multigroup/multilevel models.
   split_hierarchy <- data.table::fcase(
     features$has_group && features$has_level, list(user_args$multilevel_multigroup_order),
     features$has_group, list("group"),
@@ -219,8 +209,7 @@
 #' @keywords internal
 #' @noRd
 .merge_recipes <- function(...) {
-  # `compact` removes any NULL lists (e.g., if fontsize_overrides is NULL)
-  # `reduce` then iteratively applies `modifyList` to the sequence.
+  # `reduce` with `modifyList` is a functional way to iteratively merge a series of lists.
   reduce(compact(list(...)), utils::modifyList)
 }
 
@@ -236,8 +225,6 @@
 #' @noRd
 .assemble_recipe <- function(features, user_args) {
   # --- 1. Build all individual recipe components ---
-  # Each of these functions returns a list (a "partial recipe").
-
   base_recipe <- .build_base_recipe(features)
   user_recipe <- .build_user_recipe(user_args)
   direct_overrides <- .build_direct_overrides(user_args)
@@ -245,9 +232,7 @@
   model_hierarchy <- .build_model_hierarchy(features, user_args)
 
   # --- 2. Perform the single, final merge in the correct priority order ---
-  # The `merge_recipes` function handles NULL inputs gracefully.
-  # The order determines the hierarchy: later lists override earlier ones.
-
+  # The order of merging determines the hierarchy of overrides.
   .merge_recipes(
     base_recipe,
     user_recipe,
@@ -259,17 +244,13 @@
 
 
 .sanitize_param_table <- function(param_table) {
-  # Columns that should always be character for our operations
+  # Ensures that key columns in the parameter table are characters for consistency.
   char_cols <- c("lhs", "op", "rhs", "label", "group", "level")
-
-  # Find which of these columns actually exist in the table
   cols_to_sanitize <- intersect(char_cols, names(param_table))
 
-  # Use the robust data.table way to convert multiple columns to character
   if (length(cols_to_sanitize) > 0) {
     param_table[, (cols_to_sanitize) := lapply(.SD, as.character), .SDcols = cols_to_sanitize]
   }
-
   return(param_table)
 }
 
@@ -278,16 +259,13 @@
 #' @description An atomic helper for `purrr::reduce`. It takes the current font
 #'   size list and applies a single transformation rule to it.
 #' @param current_sizes The accumulating list of font sizes.
-#' @param rule A **vector** representing a row from `TEXT_SIZE_RULE_MAP`. The
-#'   elements correspond to the columns: `priority`, `arg_name`, `target_keys`.
+#' @param rule A vector representing a row from `TEXT_SIZE_RULE_MAP`.
 #' @param user_args The full list of user arguments.
 #' @return The updated list of font sizes.
 #' @keywords internal
 #' @noRd
 .apply_text_size_rule <- function(current_sizes, rule, user_args) {
-  # The `rule` is now a simple vector, not a data.table.
-  # We access its elements by index, corresponding to the column order in
-  # TEXT_SIZE_RULE_MAP: 1=priority, 2=arg_name, 3=target_keys
+  # This function translates a single text size argument into a list of style overrides.
   arg_name <- rule$arg_name
   arg_val <- user_args[[arg_name]]
   target_keys <- rule$target_keys[[1]]
@@ -298,6 +276,5 @@
     values <- as.list(rep(arg_val, length(target_keys)))
     stats::setNames(values, target_keys)
   }
-
   utils::modifyList(current_sizes, update_list)
 }

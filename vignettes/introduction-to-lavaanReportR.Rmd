@@ -1,8 +1,8 @@
 ---
-title: "Introduction to lavaanReportR"
+title: "Getting Started with lavaanReportR"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Introduction to lavaanReportR}
+  %\VignetteIndexEntry{Getting Started with lavaanReportR}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -15,26 +15,43 @@ knitr::opts_chunk$set(
 ```
 
 `lavaanReportR` is an R package designed to simplify the creation of
-publication-ready path diagrams for structural equation models fitted with the
-`lavaan` package. This vignette provides a step-by-step guide to using the
-package's core workflow.
+publication-ready path diagrams for structural equation models (SEMs) fitted
+with the `lavaan` package. This vignette provides a step-by-step guide to using
+the package's core workflow, aimed at academic scientists who are familiar with
+R but may not be experts in advanced programming.
 
-## The `lavaanReportR` Workflow
+## The `lavaanReportR` Workflow: A Five-Step Pipeline
 
-The package uses a five-step pipeline to create plots:
+The package is built around a five-step pipeline, where each step is a function
+that performs a specific task. This approach makes the process of creating a
+plot transparent and easy to debug. The five steps are:
 
-1.  **`analyze()`**: Extracts the model structure.
-2.  **`configure_plot()`**: Customizes the plot's appearance.
-3.  **`prepare()`**: Prepares the final data for plotting.
-4.  **`build()`**: Constructs the DOT code for the plot.
-5.  **`render()`**: Renders the final plot.
+1.  **`analyze()`**: This is the first step. It takes the parameter estimates from
+    a `lavaan` model and analyzes the model's structure. It identifies all the
+    variables (nodes), the relationships between them (edges), and detects key
+    features of the model, such as whether it is a multigroup or multilevel model.
 
-## A Complete Example
+2.  **`configure_plot()`**: This is the main control panel for customizing the
+    plot's appearance. You can change things like the layout direction, font sizes,
+    and which parts of the model to show or hide.
 
-Let's walk through a complete example using the `PoliticalDemocracy` dataset
-from the `lavaan` package.
+3.  **`prepare()`**: This function takes the analyzed model structure and the
+    configuration settings and prepares the final data tables for plotting. It's
+    an internal step that you won't usually need to interact with directly.
 
-### 1. Load the Packages and Data
+4.  **`build()`**: This function takes the prepared data and constructs the DOT
+    code, which is a language used by the Graphviz software to define graphs.
+    Again, this is an internal step that you won't typically need to worry about.
+
+5.  **`render()`**: This is the final step. It takes the DOT code and renders the
+    final plot, which you can then display or save.
+
+## A Complete Example: From Model to Plot
+
+Let's walk through a complete example using the `PoliticalDemocracy` dataset,
+which is included with the `lavaan` package.
+
+### Step 1: Load the Packages
 
 First, we need to load the `lavaan` and `lavaanReportR` packages.
 
@@ -43,48 +60,65 @@ library(lavaan)
 library(lavaanReportR)
 ```
 
-### 2. Fit a `lavaan` Model
+### Step 2: Fit a `lavaan` Model
 
-Next, we'll define and fit a simple structural equation model.
+Next, we'll define and fit a simple structural equation model. This is a classic
+model from the political science literature, examining the relationship between
+industrialization and democracy.
 
 ```{r}
 model <- '
-  # measurement model
-    ind60 =~ x1 + x2 + x3
-    dem60 =~ y1 + y2 + y3 + y4
-    dem65 =~ y5 + y6 + y7 + y8
-  # structural model
-    dem60 ~ ind60
-    dem65 ~ ind60 + dem60
+  # Measurement Model
+  ind60 =~ x1 + x2 + x3
+  dem60 =~ y1 + y2 + y3 + y4
+  dem65 =~ y5 + y6 + y7 + y8
+
+  # Structural Model
+  dem60 ~ ind60
+  dem65 ~ ind60 + dem60
 '
 fit <- sem(model, data = PoliticalDemocracy)
 ```
 
-### 3. Get the Parameter Table
+### Step 3: Get the Parameter Table
 
-The `lavaanReportR` workflow starts with a `lavaan` parameter table.
+The `lavaanReportR` workflow starts with a `lavaan` parameter table. You can get
+this by running `lavaan::parameterEstimates()` on your fitted model.
 
 ```{r}
 param_table <- parameterEstimates(fit)
+head(param_table)
 ```
 
-### 4. Run the Workflow
+This table contains all the information about the model's parameters, which
+`lavaanReportR` will use to draw the path diagram.
 
-Now, we can run the `lavaanReportR` workflow to generate the plot.
+### Step 4: Run the Workflow
+
+Now, we can run the `lavaanReportR` workflow to generate the plot. We'll use the
+pipe (`|>`) to chain the functions together, which makes the code easy to read.
 
 ```{r}
-param_table |>
+final_plot <- param_table |>
   analyze() |>
   configure_plot(
-    plot_flow_direction = "LR",
-    text_size_global = 10
+    plot_flow_direction = "LR", # Arrange the plot from left to right
+    text_size_global = 10,     # Set a global font size
+    node_labels = list(         # Relabel some of the variables for clarity
+      ind60 = "Industrialization 1960",
+      dem60 = "Democracy 1960",
+      dem65 = "Democracy 1965"
+    )
   ) |>
   prepare() |>
   build() |>
   render()
+
+# Display the final plot
+final_plot
 ```
 
 This will produce a path diagram of the fitted model. You can customize the
 plot's appearance by passing different arguments to the `configure_plot()`
-function. For example, you can change the layout direction, font sizes, and
-which elements are displayed.
+function. For more advanced customization options, please see the "Advanced
+Customization with lavaanReportR" vignette.

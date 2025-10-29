@@ -1,29 +1,33 @@
 # ==============================================================================
-# SECTION: BUILD & RENDER HELPERS
-# These functions are the core of the "dumb assembler" build phase. They take
-# the prepared data tables and instantiate the final S3 objects.
+# SECTION: BUILD PHASE
+# ==============================================================================
+# This section contains functions for the "build" phase of the workflow. The
+# functions in this section are "dumb assemblers." Their sole responsibility is
+# to take the prepared data tables from the previous phase and translate them
+# into DOT language strings for Graphviz. They do not make any decisions about
+# styling or layout.
 # ==============================================================================
 
-#' @title Build a dynamic attribute string from a data.table (Final Idiomatic Version)
-#' @description A generic, idiomatic data.table function that takes a wide
-#'   data.table and converts its attribute columns into a single, collapsed
-#'   "key=value" string for each element. This version uses a clean, vectorized
-#'   melt-enrich-transform-aggregate pattern.
+#' @title Build a dynamic attribute string from a data.table
+#' @description A generic function that converts the attribute columns of a
+#'   data.table into a single, collapsed "key=value" string for each element.
+#'
 #' @param dt The data.table to process.
 #' @param by_vars A character vector of columns that uniquely identify an element.
 #' @param meta_cols A character vector of columns to ignore during attribute assembly.
+#'
 #' @return A data.table containing the `by_vars` and a new `attr_string` column.
 #' @keywords internal
 #' @noRd
 .build_dynamic_attributes <- function(dt, by_vars, meta_cols) {
-  # 1. Definiere die Attribut-Spalten innerhalb der Funktion. Sauber und gekapselt.
+  # 1. Identify the attribute columns.
   attribute_cols <- setdiff(names(dt), c(by_vars, meta_cols))
 
-  # 2. Erstelle eine Typen-Lookup-Tabelle für die Attribute.
+  # 2. Create a lookup table for the data type of each attribute.
   col_types <- sapply(dt[, ..attribute_cols], class)
   type_lookup <- data.table::data.table(attribute = names(col_types), type = col_types)
 
-  # 3. Melt: Ein einziger, schneller Vorgang. Akzeptiere die Typ-Koersion.
+  # 3. Melt the data to a long format.
   suppressWarnings(
     long_dt <- data.table::melt(dt,
       id.vars = by_vars,
@@ -34,10 +38,10 @@
     )
   )
 
-  # 4. Enrich: Füge die korrekte Typ-Information wieder an.
+  # 4. Add the data type information back to the long-format table.
   long_dt[type_lookup, on = "attribute", type := i.type]
 
-  # 5. Transform: Formatiere die Attribute in einem einzigen, vektorisierten fcase-Aufruf.
+  # 5. Format the attributes into "key=value" strings, quoting character values.
   long_dt[, formatted_attr := data.table::fcase(
     type == "logical",   sprintf("%s=%s", attribute, tolower(value)),
     type == "character", sprintf("%s='%s'", attribute, gsub("\\", "\\\\", value, fixed = TRUE)),
@@ -45,7 +49,7 @@
     type == "integer",   sprintf("%s=%s", attribute, value)
   )]
 
-  # 6. Aggregate: Fasse die formatierten Attribute pro Element zusammen.
+  # 6. Aggregate the formatted attributes into a single string for each element.
   aggregated_attrs <- long_dt[, .(
     attr_string = paste(formatted_attr, collapse = ", ")
   ), by = by_vars]
@@ -54,9 +58,10 @@
 }
 
 
-#' @title Build DOT statements for nodes (Final Refactored Version)
-#' @description A slim wrapper that defines node-specific parameters and calls
-#'   the generic attribute builder.
+#' @title Build DOT statements for nodes
+#' @description A wrapper that defines node-specific parameters and calls the
+#'   generic attribute builder.
+#'
 #' @param nodes_dt The final nodes `data.table`.
 #' @return A character vector of DOT node definitions.
 #' @keywords internal
@@ -66,25 +71,26 @@
     return(character(0))
   }
 
-  # 1. Definiere die Node-spezifische Konfiguration.
+  # 1. Define the node-specific configuration.
   by_vars <- "id"
   meta_cols <- c(
     "node_unit", "node_type", "group", "level", "sig", "est.std",
     "est.unstd", "rank", "element_unit", "element_unit_order"
   )
 
-  # 2. Rufe den generischen Helper auf.
+  # 2. Call the generic attribute builder.
   aggregated_attrs <- .build_dynamic_attributes(nodes_dt, by_vars, meta_cols)
 
-  # 3. Führe den finalen, Node-spezifischen Assembly-Schritt durch.
+  # 3. Assemble the final DOT statements.
   final_dt <- aggregated_attrs[nodes_dt, on = "id"]
   return(final_dt[, sprintf("%s [%s];", id, attr_string)])
 }
 
 
-#' @title Build DOT statements for edges (Final Refactored Version)
-#' @description A slim wrapper that defines edge-specific parameters and calls
-#'   the generic attribute builder.
+#' @title Build DOT statements for edges
+#' @description A wrapper that defines edge-specific parameters and calls the
+#'   generic attribute builder.
+#'
 #' @param edges_dt The final edges `data.table`.
 #' @return A character vector of DOT edge definitions.
 #' @keywords internal
@@ -94,40 +100,40 @@
     return(character(0))
   }
 
-  # 1. Definiere die Edge-spezifische Konfiguration.
+  # 1. Define the edge-specific configuration.
   by_vars <- c("from", "to", "edge_type")
   meta_cols <- c(
     "id_prefix", "edge_type", "group", "level", "sig",
     "est.std", "est.unstd", "mediators", "base_paths"
   )
 
-  # 2. Rufe den generischen Helper auf.
+  # 2. Call the generic attribute builder.
   aggregated_attrs <- .build_dynamic_attributes(edges_dt, by_vars, meta_cols)
 
-  # 3. Führe den finalen, Edge-spezifischen Assembly-Schritt durch.
-  final_dt <- aggregated_attrs[edges_dt, on = by_vars] # c("from", "to", "edge_type")
+  # 3. Assemble the final DOT statements.
+  final_dt <- aggregated_attrs[edges_dt, on = by_vars]
   return(final_dt[, sprintf("%s -> %s [%s];", from, to, attr_string)])
 }
 
-#' @title Build DOT statements for rank assignments (NEU)
+#' @title Build DOT statements for rank assignments
 #' @description Groups nodes by their rank and creates `{rank=same; ...}`
 #'   statements to enforce the hierarchical layout in Graphviz.
+#'
 #' @param nodes_dt The final nodes `data.table`, which must contain a `rank` column.
 #' @return A character vector of DOT rank statements.
 #' @keywords internal
 #' @noRd
 .build_rank_statements <- function(nodes_dt) {
-  # Robuste Guard Clause: Prüft auf Existenz der Spalte und Inhalt.
   if (!"rank" %in% names(nodes_dt) || nrow(nodes_dt) == 0) {
     return(character(0))
   }
 
-  # 1. Gruppiere die Node-IDs nach ihrem Rang.
+  # 1. Group the node IDs by their rank.
   rank_groups <- nodes_dt[, .(
     nodes_str = paste(id, collapse = "; ")
   ), by = rank]
 
-  # 2. Wende die vektorisierte sprintf-Operation auf das aggregierte Ergebnis an.
+  # 2. Create the `{rank=same; ...}` statements.
   rank_groups[, sprintf("{ rank=same; %s };", nodes_str)]
 }
 
@@ -135,11 +141,14 @@
 #' @title Build global graph attribute statements
 #' @description Creates the initial DOT statements for global graph attributes
 #'   like layout direction (`rankdir`).
+#'
 #' @param recipe The recipe from the `lavaan_graph` object.
 #' @return A character vector of global DOT statements.
 #' @keywords internal
 #' @noRd
 .build_graph_statements <- function(recipe) {
+  # These are the global settings for the graph, including default styles for
+  # all nodes and edges.
   c(
     "digraph SEM {",
     "graph [layout=dot, rankdir=%s, splines=spline, nodesep=0.1, ranksep=0.5];" |> sprintf(recipe$rankdir),

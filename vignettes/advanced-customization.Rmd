@@ -1,0 +1,164 @@
+---
+title: "Advanced Customization with lavaanReportR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Advanced Customization with lavaanReportR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette builds on the "Getting Started" guide and explores the more
+advanced customization features of `lavaanReportR`. We will cover how to use the
+`configure_plot()` function to its full potential, how to work with the 'Recipe'
+system, and how to visualize more complex models, such as multigroup and
+mediation models.
+
+## Deep Dive into `configure_plot()`
+
+The `configure_plot()` function is the heart of customization in `lavaanReportR`.
+Let's explore some of its key arguments with a more complex example.
+
+### The Model: A Mediation Analysis
+
+We'll use the classic mediation model from Preacher and Hayes (2008), available
+in the `lavaan` package.
+
+```{r}
+library(lavaan)
+library(lavaanReportR)
+
+# Define the mediation model
+mediation_model <- '
+  # direct effect
+  Y ~ c*X
+  # mediator
+  M ~ a*X
+  Y ~ b*M
+  # indirect effect (a*b)
+  ab := a*b
+  # total effect
+  total := c + (a*b)
+'
+fit_mediation <- sem(mediation_model, data = Meddata)
+param_table_mediation <- parameterEstimates(fit_mediation)
+```
+
+### Advanced Customization Example
+
+Now, let's use `configure_plot()` to create a highly customized plot of this
+mediation model.
+
+```{r}
+param_table_mediation |>
+  analyze() |>
+  configure_plot(
+    # --- Layout and Global Styles ---
+    plot_flow_direction = "LR",
+    text_size_global = 11,
+
+    # --- Element Visibility ---
+    show_plot_elements = c("variances", "intercepts"), # Hide covariances
+
+    # --- Estimates and Significance ---
+    estimates_to_show = "unstandardized",
+    show_sig = TRUE,
+    show_estimates_above = 0.05, # Hide trivial paths
+
+    # --- Custom Labels ---
+    node_labels = list(
+      X = "Predictor",
+      Y = "Outcome",
+      M = "Mediator"
+    ),
+    effect_labels = list(
+      ab = "Indirect Effect",
+      total = "Total Effect",
+      c = "Direct Effect"
+    )
+  ) |>
+  prepare() |>
+  build() |>
+  render()
+```
+
+## The 'Recipe' System
+
+For ultimate control, `lavaanReportR` uses a 'Recipe' system. A recipe is a
+named list that defines all the plot settings. You can provide your own recipe
+to the `recipe` argument in `configure_plot()`. This is useful if you want to
+create a consistent style for all your plots.
+
+### Example of a Custom Recipe
+
+Let's create a custom recipe for a monochrome, academic-style plot.
+
+```{r}
+my_custom_recipe <- list(
+  # --- Global Settings ---
+  rankdir = "TB",
+  show_estimates = TRUE,
+  show_sig = TRUE,
+
+  # --- Style Overrides ---
+  style_overrides = list(
+    # Nodes
+    manifest = list(fillcolor = "white", color = "black", shape = "square"),
+    latent = list(fillcolor = "white", color = "black", shape = "circle"),
+    variance = list(color = "gray50", shape = "triangle"),
+    intercept = list(color = "gray50", shape = "diamond"),
+
+    # Edges
+    regression = list(color = "black"),
+    loading = list(color = "black"),
+    covariance = list(color = "gray50", style = "dashed"),
+    indirect = list(color = "blue"),
+    total = list(color = "purple")
+  )
+)
+
+# Now, apply the custom recipe to our mediation model
+param_table_mediation |>
+  analyze() |>
+  configure_plot(recipe = my_custom_recipe) |>
+  prepare() |>
+  build() |>
+  render()
+```
+
+## Visualizing a Multigroup Model
+
+`lavaanReportR` can automatically handle multigroup models, creating a separate
+plot for each group.
+
+```{r}
+# Define and fit a multigroup model
+multigroup_model <- '
+  # Measurement Model
+  ind60 =~ x1 + x2 + x3
+  dem60 =~ y1 + y2 + y3 + y4
+  # Structural Model
+  dem60 ~ ind60
+'
+fit_multigroup <- sem(multigroup_model, data = PoliticalDemocracy, group = "country")
+param_table_multigroup <- parameterEstimates(fit_multigroup)
+
+# Plot the multigroup model
+# By default, lavaanReportR will create a plot for each group.
+param_table_multigroup |>
+  analyze() |>
+  configure_plot(plot_flow_direction = "LR") |>
+  prepare() |>
+  build() |>
+  render()
+```
+
+This vignette has covered some of the advanced customization features of
+`lavaanReportR`. By using `configure_plot()` and the 'Recipe' system, you can
+create publication-ready path diagrams that are tailored to your specific needs.

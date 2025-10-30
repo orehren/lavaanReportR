@@ -10,6 +10,12 @@ set -e
 # ==============================================================================
 echo "#### 1. Script Preparation and Definitions ####"
 
+# --- NEW: Define robust script paths ---
+# Get the absolute path to the directory where this script is located
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+# Define the project root as the parent directory of the script dir
+PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+
 # --- Script Configuration & Argument Parsing ---
 
 # 1. Set Defaults
@@ -122,6 +128,8 @@ echo "Install Quarto:    $USE_QUARTO"
 echo "Install RStudio:   $USE_RSTUDIO"
 echo "Install Tidyverse: $USE_TIDYVERSE"
 echo "R Install Cores:   $NCPUS"
+echo "Script Directory:  $SCRIPT_DIR"
+echo "Project Root:      $PROJECT_ROOT"
 echo "---------------------"
 
 echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections
@@ -146,24 +154,18 @@ function apt_install() {
     done
 
     # --- STEP 1: Get all lists (sorted) ---
-    # List A: Your requested *base names*, sorted and unique
     local requested_basenames_sorted
     requested_basenames_sorted=$(printf "%s\n" "${basenames_list[@]}" | sort -u)
-    # List B: All *available* packages from the cache, sorted.
     local all_available_packages
     all_available_packages=$(apt-cache pkgnames | sort)
-    # List C: All *installed* packages, sorted.
     local all_installed_packages
     all_installed_packages=$(dpkg-query -W -f='${Package}\n' | sort)
 
     # --- STEP 2: Find the intersections (Set logic on BASE names) ---
-    # Find (A ∩ B): Basenames that you want AND that exist.
     local valid_basenames
     valid_basenames=$(comm -12 <(echo "${requested_basenames_sorted}") <(echo "${all_available_packages}"))
-    # Find ((A ∩ B) - C): Basenames that are valid AND NOT already installed.
     local basenames_to_install_nl
     basenames_to_install_nl=$(comm -23 <(echo "${valid_basenames}") <(echo "${all_installed_packages}"))
-    # Guard Clause: If the final list is empty, we are done.
     if [ -z "${basenames_to_install_nl}" ]; then
         return 0
     fi
@@ -225,8 +227,6 @@ apt_install "${packages_to_install[@]}"
 # --- End of base package installation ---
 
 # Add the CRAN GPG key and repository
-# wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | sudo tee /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
-# sudo add-apt-repository -y "deb https://cloud.r-project.org/bin/linux/ubuntu noble-cran40/"
 wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | sudo tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
 # add the repo from CRAN -- lsb_release adjusts to 'noble' or 'jammy' or ... as needed
 sudo add-apt-repository "deb https://cloud.r-project.org/bin/linux/ubuntu $(lsb_release -cs)-cran40/"
@@ -296,9 +296,12 @@ EOF
 # ==============================================================================
 # 6. RESTORE PACKAGE LIBRARY
 # ==============================================================================
-if [ -f "renv.lock" ]; then
+# Use the robust $PROJECT_ROOT variable to find the lock file
+if [ -f "$PROJECT_ROOT/renv.lock" ]; then
     echo "Info: renv.lock found. Restoring package library..."
-        Rscript -e 'renv::install(repos = getOption("renv.config.repos.override"))'
+    # 'renv::install()' must be run from the project root.
+    # We also need sudo to write to the system-wide R library.
+    (cd "$PROJECT_ROOT" && sudo Rscript -e 'renv::install(repos = getOption("renv.config.repos.override"))')
 fi
 
 # ==============================================================================
@@ -307,7 +310,8 @@ fi
 if [[ "${USE_RSTUDIO}" == "true" ]]; then
     echo "#### 7. Sourcing RStudio Server installer ####"
     # This script will install RStudio dependencies and the server .deb
-    source ./install-rstudio.sh
+    # Use the robust $SCRIPT_DIR variable for the path
+    source "$SCRIPT_DIR/install-rstudio.sh"
 fi
 
 # ==============================================================================
@@ -316,7 +320,8 @@ fi
 if [[ "${USE_QUARTO}" == "true" ]]; then
     echo "#### 8. Sourcing Quarto CLI installer ####"
     # This script will install Quarto dependencies and the CLI .deb
-    source ./install-quarto.sh
+    # Use the robust $SCRIPT_DIR variable for the path
+    source "$SCRIPT_DIR/install-quarto.sh"
 fi
 
 # ==============================================================================
@@ -325,7 +330,8 @@ fi
 if [[ "${USE_TIDYVERSE}" == "true" ]]; then
     echo "#### 9. Sourcing tidyverse installer ####"
     # This script will install tidyverse dependencies and R packages
-    source ./install-tidyverse.sh
+    # Use the robust $SCRIPT_DIR variable for the path
+    source "$SCRIPT_DIR/install-tidyverse.sh"
 fi
 
 # ==============================================================================

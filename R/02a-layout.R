@@ -202,7 +202,10 @@
   #     The master rank is simply the rank of the main node (id == sanitized unit).
   #     This single rule now applies universally to all node types.
   master_ranks <- node_rank_map[
-    id == .sanitize_string(node_unit),
+    id == fcase(
+      node_unit %like% ":", paste0(.sanitize_string(node_unit), "_path"),
+      default = .sanitize_string(node_unit)
+    ),
     .(node_unit, master_rank = initial_rank)
   ]
 

@@ -13,13 +13,13 @@
 }
 \value{
 An object of class \code{lavaan_model_structure}, containing the
-  analyzed components of the model (nodes, edges, features).
+  analyzed components of the model (nodes, edges, features, layout).
 }
 \description{
 This is the first phase of the `lavaanReportR` workflow. The `analyze`
   function takes a `lavaan_parameter_table` object and extracts all
-  essential structural information. It identifies nodes, edges, and model features
-  (e.g., multigroup, multilevel, LGM).
+  essential structural information. It identifies nodes, edges, model features
+  (e.g., multigroup, multilevel, LGM), and calculates the hierarchical layout.
 }
 \details{
 The analysis phase is crucial for understanding the model's topology before
@@ -34,5 +34,5 @@ object, which serves as the input for the `configure_plot` phase.
 }
 }
 \seealso{
-\code{\link{configure_plot}}, \code{\link{layout}}, \code{\link{prepare}}, \code{\link{build}}, \code{\link{render}}
+\code{\link{configure_plot}}, \code{\link{prepare}}, \code{\link{build}}, \code{\link{render}}
 }

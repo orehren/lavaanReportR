@@ -231,7 +231,7 @@ NODE_EXTRACTION_RULES <- list(
     id_suffix = NULL
   ),
   list(
-    filter_expr = quote(op == MODEL_OPS$VARIANCES & !variable %like% ":"),
+    filter_expr = quote(op == MODEL_OPS$VARIANCES),
     id_expr = quote(variable),
     unit_expr = quote(variable),
     node_type = NODE_TYPES$VARIANCE,
@@ -265,13 +265,6 @@ NODE_EXTRACTION_RULES <- list(
     node_type = NODE_TYPES$ANCHOR_ADJ,
     id_suffix = "adj"
   ),
-  list(
-    filter_expr = quote(op == MODEL_OPS$VARIANCES & variable %like% ":"),
-    id_expr = quote(variable),
-    unit_expr = quote(variable),
-    node_type = NODE_TYPES$VARIANCE,
-    id_suffix = "var"
-  )
 )
 
 

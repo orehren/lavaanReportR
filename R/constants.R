@@ -238,7 +238,7 @@ NODE_EXTRACTION_RULES <- list(
     id_suffix = "var"
   ),
   list(
-    filter_expr = quote(op == MODEL_OPS$INTERCEPTS & !variable %like% ":"),
+    filter_expr = quote(op == MODEL_OPS$INTERCEPTS),
     id_expr = quote(variable),
     unit_expr = quote(variable),
     node_type = NODE_TYPES$INTERCEPT,

@@ -301,7 +301,7 @@ if [ -f "$PROJECT_ROOT/renv.lock" ]; then
     echo "Info: renv.lock found. Restoring package library..."
     # 'renv::install()' must be run from the project root.
     # We also need sudo to write to the system-wide R library.
-    (cd "$PROJECT_ROOT" && sudo Rscript -e 'renv::install(repos = getOption("renv.config.repos.override"))')
+    (cd "$PROJECT_ROOT" && Rscript -e 'renv::install(repos = getOption("renv.config.repos.override"))')
 fi
 
 # ==============================================================================

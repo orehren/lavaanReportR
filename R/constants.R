@@ -248,15 +248,19 @@ NODE_EXTRACTION_RULES <- list(
   #   filter_expr = quote(op == MODEL_OPS$REGRESSIONS & variable %like% ":"),
   #   id_expr = quote(variable),
   #   unit_expr = quote(variable),
-  #   node_type = NODE_TYPES$MODERATOR,
-  #   id_suffix = NULL
-  # ),
+  list(
+    filter_expr = quote(op == MODEL_OPS$REGRESSIONS & variable %like% ":"),
+    id_expr = quote(variable),
+    unit_expr = quote(variable),
+    node_type = NODE_TYPES$MODERATOR,
+    id_suffix = NULL
+  ),
   list(
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & variable %like% ":"),
     id_expr = quote(variable),
     unit_expr = quote(variable),
     node_type = NODE_TYPES$ANCHOR_PATH,
-    id_suffix = NULL # "path"
+    id_suffix = "path"
   ),
   list(
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & variable %like% ":"),

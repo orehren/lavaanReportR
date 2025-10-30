@@ -704,7 +704,7 @@
 #' @keywords internal
 #' @noRd
 .analyze_layout_structure <- function(nodes, edges) {
-  # --- 1. & 2. Initial Rank Calculation (bleibt unverändert) ---
+  # --- 1. & 2. Initial Rank Calculation (Unchanged) ---
   all_node_ids <- nodes$id
   directed_paths <- .collect_all_directed_paths(edges)
   unique_node_ids <- unique(all_node_ids)
@@ -727,22 +727,31 @@
   }
   initial_ranks <- max(node_levels) - node_levels + 1
 
-  # --- 3. Consolidate Ranks by Semantic Node Unit (Radically Simplified) ---
+  # --- 3. Consolidate Ranks by Semantic Node Unit ---
 
-  # 3a. Create a map of each node to its initial rank and its unit.
+  # 3a. Create a map of each node to its rank, unit, and type.
   node_rank_map <- data.table(id = names(initial_ranks), initial_rank = initial_ranks)
-  node_rank_map[nodes, on = "id", node_unit := i.node_unit]
+  node_rank_map[nodes, on = "id", `:=`(node_unit = i.node_unit, node_type = i.node_type)]
 
-  # 3b. Create a single, definitive lookup table for the "master" rank of each unit.
-  #     The master rank is simply the rank of the main node (id == sanitized unit).
-  #     This single rule now applies universally to all node types.
+  # 3b. Create the master rank lookup table using the general rule.
   master_ranks <- node_rank_map[
     id == .sanitize_string(node_unit),
     .(node_unit, master_rank = initial_rank)
   ]
 
-  # 3c. Apply the determined master rank to all nodes within that unit.
+  # 3c. Override master ranks for moderation units.
+  # The rank for a moderator's unit should be the rank of its corresponding anchor node.
+  moderator_info <- node_rank_map[node_type == "moderator", .(node_unit, base_id = id)]
+  anchor_info <- node_rank_map[node_type == "anchor_path", .(base_id = sub("_path$", "", id), anchor_rank = initial_rank)]
+  moderator_override_ranks <- moderator_info[anchor_info, on = "base_id", .(node_unit, master_rank = i.anchor_rank)]
+
+  if (nrow(moderator_override_ranks) > 0) {
+    master_ranks[moderator_override_ranks, on = "node_unit", master_rank := i.master_rank]
+  }
+
+  # 3d. Apply the final master rank to all nodes in each unit.
   node_rank_map[master_ranks, on = "node_unit", final_rank := i.master_rank]
+  node_rank_map[is.na(final_rank), final_rank := initial_rank] # Fallback for nodes without a unit/master rank
 
   # --- 4. Assemble the final layout list ---
   final_levels <- split(node_rank_map$id, f = node_rank_map$final_rank)

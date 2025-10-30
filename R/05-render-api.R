@@ -174,20 +174,16 @@ build.lavaan_graph <- function(x, ...) {
   # 1. Erzeuge alle Teile des DOT-Codes durch vektorisierte Aufrufe
   graph_attrs <- .build_graph_statements(graph_obj$recipe)
   node_stmts <- .build_node_statements(graph_obj$nodes)
-  rank_stmts <- .build_rank_statements(graph_obj$nodes)
   edge_stmts <- .build_edge_statements(graph_obj$edges)
 
   # 2. Füge alle Teile zu einem einzigen String zusammen
   full_dot_code <- c(
     graph_attrs,
     "",
-    "// 1. Define all nodes (sorted for layout influence)",
+    "// 1. Define all nodes",
     node_stmts,
     "",
-    "// 2. Assign nodes to ranks",
-    rank_stmts,
-    "",
-    "// 3. Define all edges",
+    "// 2. Define all edges",
     edge_stmts,
     "}"
   ) |> paste(collapse = "\n")

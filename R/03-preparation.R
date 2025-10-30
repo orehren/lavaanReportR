@@ -44,30 +44,10 @@
   # --- 5. Styling, Layout Enrichment, and Prefixing ---
   prepared_data <- .apply_node_styling(prepared_data, config$recipe)
 
-  layout_map <- data.table(
-    id = unlist(layout_info$levels, use.names = FALSE),
-    rank = rep(names(layout_info$levels), lengths(layout_info$levels))
-  )
-  prepared_data[layout_map, on = "id", rank := i.rank]
-
-  if (nrow(layout_info$element_unit_map) > 0) {
-    prepared_data[layout_info$element_unit_map,
-      on = "id",
-      `:=`(element_unit = i.element_unit, element_unit_order = i.element_unit_order)
-    ]
-  }
+  prepared_data[layout_info, on = "id", `:=`(x = i.x, y = i.y)]
+  prepared_data[, pos := paste0(x, ",", y, "!")]
 
   prepared_data <- .apply_group_level_prefixes(prepared_data, "id", config)
-
-  # --- 6. Final Sorting for Deterministic Layout ---
-  # This is the new, correct location for the sorting logic.
-  # It ensures the data passed to the build phase is already in the final order.
-  if ("rank" %in% names(prepared_data)) {
-    data.table::setorderv(
-      prepared_data,
-      cols = c("rank", "node_unit")
-    )
-  }
 
   return(prepared_data)
 }

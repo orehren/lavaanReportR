@@ -218,6 +218,25 @@
   return(list(levels = final_levels, element_unit_map = data.table()))
 }
 
+.calculate_xy_layout <- function(nodes, edges) {
+  # 1. Determine hierarchical ranks (y-coordinates)
+  ranks <- .analyze_layout_structure(nodes, edges)
+
+  # Convert ranks to a data.table for easier manipulation
+  rank_dt <- data.table(
+    id = unlist(ranks$levels, use.names = FALSE),
+    y = rep(names(ranks$levels), lengths(ranks$levels))
+  )
+
+  # 2. Calculate x-coordinates for each rank
+  #    - For each rank, count the number of nodes
+  #    - Create a sequence from -n/2 to n/2 for each rank
+  rank_dt[, n := .N, by = y]
+  rank_dt[, x := seq(-.N/2 + 0.5, .N/2 - 0.5, by = 1), by = y]
+
+  return(rank_dt[, .(id, x, y)])
+}
+
 #' @title Calculate Layout for a Plot
 #' @description This is the third phase of the `lavaanReportR` workflow. The
 #'   `layout` function takes a `lavaan_plot_config` object and calculates the
@@ -230,7 +249,8 @@ layout.lavaan_plot_config <- function(x, ...) {
   config <- x
   analyzed_model <- config$analyzed_model
 
-  layout <- .analyze_layout_structure(analyzed_model$nodes, analyzed_model$edges)
+  # layout <- .analyze_layout_structure(analyzed_model$nodes, analyzed_model$edges)
+  layout <- .calculate_xy_layout(analyzed_model$nodes, analyzed_model$edges)
 
   .new_lavaan_layout(
     config = config,

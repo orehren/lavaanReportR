@@ -264,7 +264,7 @@ NODE_EXTRACTION_RULES <- list(
     unit_expr = quote(variable),
     node_type = NODE_TYPES$ANCHOR_ADJ,
     id_suffix = "adj"
-  ),
+  )
 )
 
 

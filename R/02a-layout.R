@@ -219,23 +219,51 @@
 }
 
 .calculate_xy_layout <- function(nodes, edges) {
-  # 1. Determine hierarchical ranks (y-coordinates)
+  # 1. Determine hierarchical ranks
   ranks <- .analyze_layout_structure(nodes, edges)
+  directed_paths <- .collect_all_directed_paths(edges)
 
   # Convert ranks to a data.table for easier manipulation
-  rank_dt <- data.table(
+  layout_dt <- data.table(
     id = unlist(ranks$levels, use.names = FALSE),
-    y = rep(names(ranks$levels), lengths(ranks$levels))
+    rank = as.numeric(rep(names(ranks$levels), lengths(ranks$levels)))
   )
 
-  # 2. Calculate x-coordinates for each rank
-  #    - For each rank, count the number of nodes
-  #    - Create a sequence from -n/2 to n/2 for each rank
-  rank_dt[, n := .N, by = y]
-  rank_dt[, x := seq(-.N/2 + 0.5, .N/2 - 0.5, by = 1), by = y]
+  # 2. Assign initial deterministic x/y coordinates
+  median_rank <- median(unique(layout_dt$rank))
+  layout_dt[, y := -(rank - median_rank)]
+  setorder(layout_dt, y, id)
+  layout_dt[, x := seq(-.N/2 + 0.5, .N/2 - 0.5, by = 1), by = y]
 
-  return(rank_dt[, .(id, x, y)])
+  # 3. Iteratively refine x-coordinates using barycenter method
+  n_iterations <- 3
+  for (i in seq_len(n_iterations)) {
+
+    # Create a lookup for current x positions
+    pos_lookup <- setNames(layout_dt$x, layout_dt$id)
+
+    # Get parent and child positions
+    parents <- directed_paths[, .(parent_x = pos_lookup[from]), by = .(to = to)]
+    children <- directed_paths[, .(child_x = pos_lookup[to]), by = .(from = from)]
+
+    # Calculate barycenters
+    bary_parents <- parents[, .(barycenter = mean(parent_x, na.rm = TRUE)), by = .(id = to)]
+    bary_children <- children[, .(barycenter = mean(child_x, na.rm = TRUE)), by = .(id = from)]
+
+    # Merge barycenters, giving precedence to parent-based positioning
+    barycenters <- rbind(bary_parents, bary_children[!id %in% bary_parents$id])
+
+    # Update desired x-positions in the layout table
+    layout_dt[barycenters, on = "id", desired_x := i.barycenter]
+
+    # Re-sort and re-assign final x to avoid overlaps
+    setorder(layout_dt, y, desired_x, na.last = TRUE)
+    layout_dt[, x := seq(-.N/2 + 0.5, .N/2 - 0.5, by = 1), by = y]
+  }
+
+  return(layout_dt[, .(id, x, y)])
 }
+
 
 #' @title Calculate Layout for a Plot
 #' @description This is the third phase of the `lavaanReportR` workflow. The

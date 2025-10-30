@@ -231,39 +231,32 @@ NODE_EXTRACTION_RULES <- list(
     id_suffix = NULL
   ),
   list(
-    filter_expr = quote(op == MODEL_OPS$VARIANCES & !variable %like% ":"),
+    filter_expr = quote(op == MODEL_OPS$VARIANCES),
     id_expr = quote(variable),
     unit_expr = quote(variable),
     node_type = NODE_TYPES$VARIANCE,
     id_suffix = "var"
   ),
   list(
-    filter_expr = quote(op == MODEL_OPS$INTERCEPTS & !variable %like% ":"),
+    filter_expr = quote(op == MODEL_OPS$INTERCEPTS),
     id_expr = quote(variable),
     unit_expr = quote(variable),
     node_type = NODE_TYPES$INTERCEPT,
     id_suffix = "int"
   ),
-  # list(
-  #   filter_expr = quote(op == MODEL_OPS$REGRESSIONS & variable %like% ":"),
-  #   id_expr = quote(variable),
-  #   unit_expr = quote(variable),
-  #   node_type = NODE_TYPES$MODERATOR,
-  #   id_suffix = NULL
-  # ),
   list(
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & variable %like% ":"),
     id_expr = quote(variable),
     unit_expr = quote(variable),
-    node_type = NODE_TYPES$ANCHOR_PATH,
-    id_suffix = NULL # "path"
+    node_type = NODE_TYPES$MODERATOR,
+    id_suffix = NULL
   ),
   list(
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & variable %like% ":"),
     id_expr = quote(variable),
     unit_expr = quote(variable),
-    node_type = NODE_TYPES$ANCHOR_ADJ,
-    id_suffix = "adj"
+    node_type = NODE_TYPES$ANCHOR_PATH,
+    id_suffix = "path"
   )
 )
 
@@ -315,14 +308,14 @@ EDGE_EXTRACTION_RULES <- list(
     id_prefix = "cov"
   ),
   list(
-    filter_expr = quote(op == MODEL_OPS$VARIANCES & !rhs %like% ":"),
+    filter_expr = quote(op == MODEL_OPS$VARIANCES),
     from_expr = quote(lhs),
     to_expr = quote(paste0(.sanitize_string(lhs), "_var")),
     edge_type = EDGE_TYPES$VARIANCE,
     id_prefix = "var"
   ),
   list(
-    filter_expr = quote(op == MODEL_OPS$INTERCEPTS & !rhs %like% ":"),
+    filter_expr = quote(op == MODEL_OPS$INTERCEPTS),
     from_expr = quote(paste0(.sanitize_string(lhs), "_int")),
     to_expr = quote(lhs),
     edge_type = EDGE_TYPES$INTERCEPT,
@@ -330,21 +323,21 @@ EDGE_EXTRACTION_RULES <- list(
   ),
   list(
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & rhs %like% ":"),
-    from_expr = quote(strsplit(rhs, ":") |> unlist() |> head(1)),
-    to_expr = quote(rhs),
+    from_expr = quote(strsplit(rhs, ":")[[1]][1]),
+    to_expr = quote(paste0(.sanitize_string(rhs), "_path")),
     edge_type = EDGE_TYPES$MODERATED_PATH_SEGMENT_1,
     id_prefix = "mod"
   ),
   list(
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & rhs %like% ":"),
-    from_expr = quote(rhs),
+    from_expr = quote(paste0(.sanitize_string(rhs), "_path")),
     to_expr = quote(lhs),
     edge_type = EDGE_TYPES$MODERATED_PATH_SEGMENT_2,
     id_prefix = "mod"
   ),
   list(
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & rhs %like% ":"),
-    from_expr = quote(strsplit(rhs, ":") |> unlist() |> head(2)),
+    from_expr = quote(paste0(.sanitize_string(rhs), "_path")),
     to_expr = quote(rhs),
     edge_type = EDGE_TYPES$MODERATION,
     id_prefix = "mod"

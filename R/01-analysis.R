@@ -733,14 +733,11 @@
   node_rank_map <- data.table(id = names(initial_ranks), initial_rank = initial_ranks)
   node_rank_map[nodes, on = "id", `:=`(node_unit = i.node_unit, node_type = i.node_type)]
 
-  # 3b. Create the master rank lookup table using the general rule.
-  master_ranks <- node_rank_map[
-    id == .sanitize_string(node_unit),
-    .(node_unit, master_rank = initial_rank)
-  ]
+  # 3b. Create the master rank lookup table using the general rule (max rank in unit).
+  master_ranks <- node_rank_map[!is.na(node_unit), .(master_rank = max(initial_rank)), by = node_unit]
 
-  # 3c. Override master ranks for moderation units.
-  # The rank for a moderator's unit should be the rank of its corresponding anchor node.
+  # 3c. **Targeted Override for Moderation**: The rank for a moderator's unit
+  # should be determined ONLY by the rank of its `anchor_path` node.
   moderator_info <- node_rank_map[node_type == "moderator", .(node_unit, base_id = id)]
   anchor_info <- node_rank_map[node_type == "anchor_path", .(base_id = sub("_path$", "", id), anchor_rank = initial_rank)]
   moderator_override_ranks <- moderator_info[anchor_info, on = "base_id", .(node_unit, master_rank = i.anchor_rank)]
@@ -749,9 +746,9 @@
     master_ranks[moderator_override_ranks, on = "node_unit", master_rank := i.master_rank]
   }
 
-  # 3d. Apply the final master rank to all nodes in each unit.
+  # 3d. Apply the final master rank to all nodes within each unit.
   node_rank_map[master_ranks, on = "node_unit", final_rank := i.master_rank]
-  node_rank_map[is.na(final_rank), final_rank := initial_rank] # Fallback for nodes without a unit/master rank
+  node_rank_map[is.na(final_rank), final_rank := initial_rank] # Fallback for nodes without a unit
 
   # --- 4. Assemble the final layout list ---
   final_levels <- split(node_rank_map$id, f = node_rank_map$final_rank)
@@ -1057,41 +1054,58 @@
 #' @keywords internal
 #' @noRd
 .modify_moderated_edges <- function(edges) {
-  # --- 1. Identify Moderation Edges ---
-  moderation_edges <- edges[edge_type == EDGE_TYPES$MODERATED_PATH_SEGMENT_2]
+  # --- 1. Isolate Raw Moderation Edges ---
+  # These are the initial edges created for the interaction term.
+  moderation_edges_raw <- edges[edge_type == EDGE_TYPES$MODERATION]
 
-  # --- 2. Guard Clause ---
-  # If there are no moderation effects, return the original table immediately.
-  if (nrow(moderation_edges) == 0) {
+  if (nrow(moderation_edges_raw) == 0) {
     return(edges)
   }
 
-  # --- 3. Create a Lookup Table for the Update Join ---
-  # This table maps the target simple regression (by its `from` and `to`) to
-  # the new `from` anchor and `edge_type` it should receive.
-  update_lookup <- moderation_edges[, .(
-    # The original predictor (e.g., "y1") is the part before the first underscore.
-    original_from = sapply(strsplit(from, "_"), `[`, 1),
-    to = to,
-    # The new values to assign.
-    new_from = from,
-    new_edge_type = edge_type
-  )]
+  # --- 2. Process Each Moderation Term Individually ---
+  new_edges_list <- lapply(split(moderation_edges_raw, by = "id"), function(term) {
+    # Extract key variable names for clarity
+    interaction_term_string <- term$to
+    outcome_var <- term$from
+    predictors <- unlist(strsplit(interaction_term_string, "_"))
+    anchor_path_node <- paste0(interaction_term_string, "_path")
 
-  # --- 4. Perform the data.table Update Join ---
-  # This single, declarative operation replaces the entire lapply loop.
-  # It finds matching rows in `edges` and updates their `from` and `edge_type`
-  # by reference. It's atomic, efficient, and highly readable.
-  edges[update_lookup,
-    on = .(from = original_from, to = to),
-    `:=`(from = i.new_from, edge_type = i.new_edge_type)
-  ]
+    # 2a. Create Path Segments from Predictors to the Anchor Node
+    path_segments <- rbindlist(lapply(predictors, function(p) {
+      # CRITICAL CYCLE DETECTION: If a predictor is also the outcome,
+      # create a non-directed covariance edge to avoid a graph cycle.
+      edge_type <- if (p == outcome_var) EDGE_TYPES$COVARIANCE else EDGE_TYPES$MODERATED_PATH_SEGMENT_1
+      data.table(from = p, to = anchor_path_node, edge_type = edge_type, id_prefix = "mod")
+    }))
 
-  # --- 5. Final Filtering ---
-  # Remove the original moderation edge rows, as their information has now been
-  # integrated into the main regression paths.
-  # Using an anti-join (`!`) is the canonical data.table way to do this.
-  final_edges <- edges[!moderation_edges, on = names(edges)]
+    # 2b. Create the Final Link from the Anchor to the Moderator Node
+    moderation_link <- data.table(
+      from = anchor_path_node,
+      to = interaction_term_string,
+      edge_type = EDGE_TYPES$MODERATION,
+      id_prefix = "mod"
+    )
+
+    return(rbind(path_segments, moderation_link))
+  })
+
+  # --- 3. Assemble the Final, Corrected Edge Table ---
+  newly_created_edges <- rbindlist(new_edges_list, use.names = TRUE, fill = TRUE)
+
+  # Identify all original, obsolete edges related to the interaction term
+  obsolete_edge_ids <- edges[grepl(":", id, fixed = TRUE) &
+                               (edge_type %in% c(EDGE_TYPES$MODERATION,
+                                                 EDGE_TYPES$MODERATED_PATH_SEGMENT_1,
+                                                 EDGE_TYPES$MODERATED_PATH_SEGMENT_2)), id]
+
+  # Remove the obsolete edges
+  edges_cleaned <- edges[!id %in% obsolete_edge_ids]
+
+  # Combine the cleaned original edges with the new, correct moderation edges
+  final_edges <- rbindlist(list(edges_cleaned, newly_created_edges), use.names = TRUE, fill = TRUE)
+
+  # Regenerate unique IDs for all edges
+  final_edges[, id := paste(id_prefix, from, "to", to, sep = "_")]
 
   return(final_edges)
 }

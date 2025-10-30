@@ -720,28 +720,40 @@
 #' @keywords internal
 #' @noRd
 .assemble_edges_list <- function(param_table, rule, cols_to_keep) {
-  # 1. Programmatically construct the `j` expression as a `call` object.
+  # 1. Safely get the indices of rows that match the rule's filter.
+  #    The `env` argument ensures the expression is evaluated in the
+  #    context of `param_table` without NSE pitfalls.
+  #    `.I` is a special `data.table` symbol that returns the row indices.
+  matching_row_indices <- param_table[, .I[.i], env = list(.i = rule$filter_expr)]
+
+  # 2. Guard Clause: If no rows match the filter, return an empty data.table
+  #    immediately. This prevents the transformation logic from running on an
+  #    empty set, which was the source of the "subscript out of bounds" error.
+  if (length(matching_row_indices) == 0) {
+    return(data.table::data.table())
+  }
+
+  # 3. Programmatically construct the `j` expression as a `call` object.
+  #    This is identical to the original implementation.
   j_call <- as.call(c(
     quote(list),
-    # Define the new columns based on the rule's expressions
     list(
       from = rule$from_expr,
       to = rule$to_expr,
       edge_type = rule$edge_type,
       id_prefix = rule$id_prefix,
-      # The `label` column is taken directly if it exists
       label = quote(if ("label" %in% names(param_table)) as.character(label) else "")
     ),
-    # Add the original columns to keep
     lapply(cols_to_keep, as.name)
   ))
 
-  # 2. Execute the parameterized data.table call.
+  # 4. Execute the transformation ONLY on the pre-filtered rows.
+  #    We pass the calculated row indices to `i`, and the dynamic `j_call`
+  #    to `.j` via the `env` argument.
   param_table[
-    .i,
+    matching_row_indices,
     .j,
     env = list(
-      .i = rule$filter_expr,
       .j = j_call
     )
   ]
@@ -789,6 +801,12 @@
   )
 
   all_edges <- data.table::rbindlist(raw_edges_list, use.names = TRUE, fill = TRUE)
+
+  # Final Guard Clause: If after all rules, no edges were created, return
+  # the empty table before attempting to access columns that may not exist.
+  if (nrow(all_edges) == 0) {
+    return(all_edges)
+  }
 
   # Sanitize from/to columns after creation
   all_edges[, from := .sanitize_string(from)][, to := .sanitize_string(to)]

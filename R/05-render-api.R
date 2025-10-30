@@ -5,17 +5,17 @@
 #' @title Analyze Model Structure
 #' @description This is the first phase of the `lavaanReportR` workflow. The `analyze`
 #'   function takes a `lavaan_parameter_table` object and extracts all
-#'   essential structural information. It identifies nodes, edges, model features
-#'   (e.g., multigroup, multilevel, LGM), and calculates the hierarchical layout.
+#'   essential structural information. It identifies nodes, edges, and model features
+#'   (e.g., multigroup, multilevel, LGM).
 #' @details
 #' The analysis phase is crucial for understanding the model's topology before
 #' any styling or plotting decisions are made. It produces a `lavaan_model_structure`
 #' object, which serves as the input for the `configure_plot` phase.
-#' @seealso \code{\link{configure_plot}}, \code{\link{prepare}}, \code{\link{build}}, \code{\link{render}}
+#' @seealso \code{\link{configure_plot}}, \code{\link{layout}}, \code{\link{prepare}}, \code{\link{build}}, \code{\link{render}}
 #' @param x An object of class \code{lavaan_parameter_table}.
 #' @param ... Additional arguments (not used).
 #' @return An object of class \code{lavaan_model_structure}, containing the
-#'   analyzed components of the model (nodes, edges, features, layout).
+#'   analyzed components of the model (nodes, edges, features).
 #' @exportS3Method lavaanReportR::analyze
 #' @examples
 #' \dontrun{
@@ -41,7 +41,7 @@ analyze.lavaan_parameter_table <- function(x, ...) {
   defined_paths <- .analyze_defined_paths_structure(param_table)
 
   # Analyze the hierarchical layout BASED ON the extracted nodes and edges
-  layout <- .analyze_layout_structure(nodes, edges)
+  # layout <- .analyze_layout_structure(nodes, edges)
 
   # --- 2. Assemble the final analysis object ---
   .new_lavaan_model_structure(
@@ -49,8 +49,8 @@ analyze.lavaan_parameter_table <- function(x, ...) {
     features = features,
     nodes = nodes,
     edges = edges,
-    defined_paths = defined_paths,
-    layout = layout
+    defined_paths = defined_paths
+    # layout = layout
   )
 }
 
@@ -68,8 +68,8 @@ analyze.lavaan_parameter_table <- function(x, ...) {
 #' @details
 #' This function acts as the central control panel for customizing the plot's
 #' appearance. All arguments are optional and will fall back to sensible defaults.
-#' The result is a complete configuration blueprint that guides the `prepare` phase.
-#' @seealso \code{\link{analyze}}, \code{\link{prepare}}, \code{\link{build}}, \code{\link{render}}
+#' The result is a complete configuration blueprint that guides the `layout` and `prepare` phases.
+#' @seealso \code{\link{analyze}}, \code{\link{layout}}, \code{\link{prepare}}, \code{\link{build}}, \code{\link{render}}
 #' @param x An object of class \code{lavaan_model_structure}.
 #' @param estimates_to_show A character string specifying which estimates to use.
 #'   Can be `"standardized"`, `"unstandardized"`, or `"none"`.
@@ -144,48 +144,6 @@ configure_plot.lavaan_model_structure <- function(x,
 }
 
 
-# ==============================================================================
-# SECTION: WORKFLOW - PREPARATION PHASE
-# ==============================================================================
-
-#' @title Prepare Final Data for Plotting
-#' @description This is the third phase of the `lavaanReportR` workflow. The
-#'   `prepare` function takes the `lavaan_plot_config` object and applies all
-#'   styling, labeling, and filtering rules to produce the final, "build-ready"
-#'   data tables for nodes and edges.
-#' @details
-#' This phase is the final data transformation step. It enriches the analyzed
-#' model structure with the aesthetic settings from the configuration, resulting
-#' in a `lavaan_graph` object that contains everything needed to build the DOT code.
-#' @seealso \code{\link{analyze}}, \code{\link{configure_plot}}, \code{\link{build}}, \code{\link{render}}
-#' @param x An object of class \code{lavaan_plot_config}.
-#' @param ... Not used.
-#' @return A \code{lavaan_graph} object containing the final, build-ready
-#'   data.tables for nodes and edges, along with the final recipe.
-#' @exportS3Method lavaanReportR::prepare
-#' @examples
-#' \dontrun{
-#'   # Assuming 'plot_config' is from the configure_plot() step
-#'   prepared_graph <- prepare(plot_config)
-#' }
-prepare.lavaan_plot_config <- function(x, ...) {
-  config <- x
-
-  # --- The Enrichment Pipelines ---
-  # We now run two separate, parallel pipelines: one for nodes and one for edges.
-  # This aligns with the architectural principle of creating distinct, build-ready
-  # data structures for each type of graph element.
-  prepared_nodes <- .prepare_nodes_for_build(config)
-  prepared_edges <- .prepare_edges_for_build(config)
-
-  # --- Final Assembly of lavaan_graph object ---
-  .new_lavaan_graph(
-    nodes = prepared_nodes,
-    edges = prepared_edges,
-    recipe = config$recipe,
-    user_args = config$user_args
-  )
-}
 
 
 # ==============================================================================

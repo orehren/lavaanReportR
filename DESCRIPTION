@@ -20,7 +20,8 @@ Imports:
     igraph,
     DiagrammeR,
     data.table,
-    purrr
+    purrr,
+    zoo
 Suggests: 
     psych,
     devtools,

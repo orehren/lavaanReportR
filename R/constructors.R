@@ -31,6 +31,16 @@
 }
 
 
+#' @title Internal S3 constructor for a `lavaan_layout` object.
+#' @description Creates the container for the results of the `layout` phase.
+#' @param ... A named list of layout results.
+#' @return An object of class `lavaan_layout`.
+#' @keywords internal
+.new_lavaan_layout <- function(...) {
+  structure(list(...), class = "lavaan_layout")
+}
+
+
 ###################################################
 
 

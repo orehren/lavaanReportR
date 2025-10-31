@@ -368,8 +368,8 @@
   # Recursively call this function for each component.
   result_list <- lapply(parts, .resolve_to_path_labels, dt = dt)
 
-  # Collect and return all unique atomic parts.
-  return(unique(unlist(result_list)))
+  # Collect and return all atomic parts.
+  return(unlist(result_list))
 }
 
 
@@ -395,9 +395,16 @@
 #' @noRd
 .deconstruct_defined_paths <- function(defined_params, direct_paths, full_param_table) {
   # Deconstruct each defined parameter's formula into a long list of base path labels
-  deconstructed_long <- defined_params[, .(
-    base_path_label = unlist(lapply(label, .resolve_to_path_labels, dt = full_param_table))
-  ), by = .(defined_label = label)]
+  deconstructed_long <- defined_params[,
+    {
+      base_labels <- .resolve_to_path_labels(label, full_param_table)
+      .(
+        base_path_label = base_labels,
+        base_path_order = seq_along(base_labels)
+      )
+    },
+    by = .(defined_label = label)
+  ]
 
   # Join the `from` and `to` information for each base path.
   # This is a left join, keeping all deconstructed paths and adding structure info.
@@ -425,19 +432,19 @@
 #' @keywords internal
 #' @noRd
 .aggregate_path_structure <- function(paths_with_structure) {
-  paths_with_structure[,
-    {
-      all_nodes <- unique(c(from, to))
-      start_nodes <- setdiff(from, to)
-      end_nodes <- setdiff(to, from)
+  # Sort by the explicit order to ensure correctness
+  setorder(paths_with_structure, defined_label, base_path_order)
 
-      .(
-        from = start_nodes,
-        to = end_nodes,
-        mediators = list(setdiff(all_nodes, c(start_nodes, end_nodes))),
-        base_paths = list(unique(base_path_label))
-      )
-    },
+  paths_with_structure[,
+    .(
+      # The start node is the `from` of the FIRST path segment.
+      from = from[1],
+      # The end node is the `to` of the LAST path segment.
+      to = to[.N],
+      # Mediators are all nodes excluding the definitive start and end nodes.
+      mediators = list(setdiff(unique(c(from, to)), c(from[1], to[.N]))),
+      base_paths = list(unique(base_path_label))
+    ),
     by = .(defined_label)
   ]
 }
@@ -536,6 +543,219 @@
 }
 
 
+# ------------------------------------------------------------------------------
+# Helpers for Layout Analysis
+# ------------------------------------------------------------------------------
+
+
+#' @title Calculate Hierarchical Structure
+#' @description The core layout algorithm using `igraph`. It determines the
+#'   hierarchical levels of nodes in a directed acyclic graph.
+#'
+#' @param nodes A character vector of node IDs.
+#' @param edges A data.table with `from` and `to` columns for directed edges.
+#'
+#' @return A named list where names are level numbers (as characters) and
+#'   values are character vectors of the node IDs on that level.
+#' @keywords internal
+#' @noRd
+.calculate_hierarchical_structure <- function(nodes, edges) {
+  graph <- igraph::graph_from_data_frame(edges, directed = TRUE, vertices = nodes)
+
+  if (!igraph::is_dag(graph)) {
+    warning("A cycle was detected in the model graph. Hierarchical layout may be incorrect.", call. = FALSE)
+    return(list(`1` = nodes))
+  }
+
+  # --- Core Algorithm ---
+
+  # 1. Get a topologically sorted list of nodes
+  sorted_nodes <- igraph::topo_sort(graph, mode = "out") |> names()
+
+  # 2. Initialize the level vector for all nodes
+  node_names <- igraph::V(graph) |> names()
+  node_levels <- rep(1, length(node_names)) |> stats::setNames(node_names)
+
+  # 3. Iterate backwards through the sorted list to calculate levels
+  for (node in rev(sorted_nodes)) {
+    successors <- igraph::neighbors(graph, node, mode = "out") |> names()
+
+    # Guard Clause: If a node has no successors (it's a sink), its level
+    # remains 1. Skip to the next node.
+    if (length(successors) == 0) {
+      next
+    }
+
+    # The level of a node is 1 + the maximum level of its children.
+    node_levels[node] <- 1 + max(node_levels[successors])
+  }
+
+  # 4. Invert the levels so that source nodes start at level 1
+  final_levels <- max(node_levels) - node_levels + 1
+
+  # 5. Group nodes by their final level number
+  final_levels |>
+    names() |>
+    split(f = final_levels)
+}
+
+
+#' @title Analyze the Structure of a Single Element Unit
+#' @description Calculates the internal hierarchical structure for a single,
+#'   pre-defined unit of elements (e.g., all "predictors" or all "growth_factors").
+#'   It filters the relevant paths and calls the core layout algorithm.
+#'
+#' @param element_unit_name The name of the element unit (e.g., "predictors").
+#' @param element_unit_nodes A list containing a character vector of node IDs in the unit.
+#' @param all_paths A data.table of all directed paths in the model.
+#'
+#' @return A list containing the calculated `$levels_list` and a data.table
+#'   with the `$element_unit_info`, or `NULL` if the unit is empty.
+#' @keywords internal
+#' @noRd
+.analyze_element_unit_structure <- function(element_unit_name, element_unit_nodes, all_paths) {
+  # Unpack the vector from the list structure provided by `purrr::map2`
+  nodes <- unlist(element_unit_nodes)
+
+  # Guard Clause: If this element unit contains no nodes, there is nothing to do.
+  if (is.null(nodes) || length(nodes) == 0) {
+    return(NULL)
+  }
+
+  # Filter the global path list to get only the edges internal to this unit.
+  internal_edges <- all_paths[from %in% nodes & to %in% nodes]
+
+  # Call the core algorithm to calculate the hierarchical levels for this unit.
+  levels_list <- .calculate_hierarchical_structure(nodes, internal_edges)
+
+  # Assemble the final output for this unit.
+  list(
+    levels_list = levels_list,
+    element_unit_info = data.table::data.table(id = nodes, element_unit = element_unit_name)
+  )
+}
+
+
+#' @title Collect All Directed Paths for Layout
+#' @description Extracts all edges that define the hierarchical structure of the
+#'   graph. This now correctly includes the segments of moderated paths.
+#' @param edges The data.table of all extracted edges from `.analyze_edge_structure`.
+#' @return A data.table with `from` and `to` columns.
+#' @keywords internal
+.collect_all_directed_paths <- function(edges) {
+  directed_edge_types <- c(
+    EDGE_TYPES$REGRESSION,
+    EDGE_TYPES$LOADING,
+    EDGE_TYPES$MODERATION,
+    EDGE_TYPES$MODERATED_PATH_SEGMENT_1,
+    EDGE_TYPES$MODERATED_PATH_SEGMENT_2
+  )
+
+  edges[edge_type %in% directed_edge_types, .(from, to)]
+}
+
+
+#' @title Assemble Final Layout Data
+#' @description Combines the layout results from multiple element units into a
+#'   single, final layout object containing the complete level list and a map
+#'   of nodes to their element units.
+#'
+#' @param layout_results A list of results from `.analyze_element_unit_structure`.
+#'
+#' @return A list containing the final `$levels` (a named list) and
+#'   `$element_unit_map` (a data.table).
+#' @keywords internal
+#' @noRd
+.assemble_layout_data <- function(layout_results) {
+  # Filter out any NULL results from element units that had no nodes
+  valid_results <- compact(layout_results)
+
+  # Guard Clause: If no valid layouts could be calculated at all.
+  if (length(valid_results) == 0) {
+    warning("Could not determine layout; no valid element units found.", call. = FALSE)
+    return(list(levels = list(), element_unit_map = data.table::data.table()))
+  }
+
+  # --- 1. Assemble the final list of levels ---
+
+  # Combine all level lists from the valid results into a single list.
+  # `unlist(recursive = FALSE)` correctly merges the lists of lists.
+  all_levels <- map(valid_results, "levels_list") |>
+    unlist(recursive = FALSE)
+
+  # Re-number the final levels sequentially from 1.
+  names(all_levels) <- seq_along(all_levels)
+
+  # --- 2. Assemble the final map of elements to units ---
+
+  # Combine all element unit info tables into a single map.
+  element_unit_map <- map_dfr(valid_results, "element_unit_info", .id = "element_unit_order")
+
+  # Convert the order column to integer for potential sorting later.
+  element_unit_map[, element_unit_order := as.integer(element_unit_order)]
+
+  # --- 3. Return the final assembled object ---
+  list(levels = all_levels, element_unit_map = element_unit_map)
+}
+
+
+#' @title Analyze Graph Layout (Orchestrator)
+#' @description Orchestrates the calculation of hierarchical layout levels for
+#'   all nodes in the model. This version uses a robust, two-step approach
+#'   that correctly consolidates ranks for all semantic node units.
+#'
+#' @param nodes The data.table of all extracted nodes.
+#' @param edges The data.table of all extracted edges.
+#'
+#' @return A named list containing the final layout data (`$levels`).
+#' @keywords internal
+#' @noRd
+.analyze_layout_structure <- function(nodes, edges) {
+  # --- 1. & 2. Initial Rank Calculation (bleibt unverändert) ---
+  all_node_ids <- nodes$id
+  directed_paths <- .collect_all_directed_paths(edges)
+  unique_node_ids <- unique(all_node_ids)
+
+  graph <- igraph::graph_from_data_frame(directed_paths, directed = TRUE, vertices = unique_node_ids)
+
+  if (!igraph::is_dag(graph)) {
+    warning("A cycle was detected...", call. = FALSE)
+    return(list(levels = list(`1` = unique_node_ids), element_unit_map = data.table()))
+  }
+
+  sorted_nodes <- names(igraph::topo_sort(graph, mode = "out"))
+  node_levels <- stats::setNames(rep(1, length(unique_node_ids)), unique_node_ids)
+
+  for (node in rev(sorted_nodes)) {
+    successors <- names(igraph::neighbors(graph, node, mode = "out"))
+    if (length(successors) > 0) {
+      node_levels[node] <- 1 + max(node_levels[successors])
+    }
+  }
+  initial_ranks <- max(node_levels) - node_levels + 1
+
+  # --- 3. Consolidate Ranks by Semantic Node Unit (Radically Simplified) ---
+
+  # 3a. Create a map of each node to its initial rank and its unit.
+  node_rank_map <- data.table(id = names(initial_ranks), initial_rank = initial_ranks)
+  node_rank_map[nodes, on = "id", node_unit := i.node_unit]
+
+  # 3b. Create a single, definitive lookup table for the "master" rank of each unit.
+  #     The master rank is simply the rank of the main node (id == sanitized unit).
+  #     This single rule now applies universally to all node types.
+  master_ranks <- node_rank_map[
+    id == .sanitize_string(node_unit),
+    .(node_unit, master_rank = initial_rank)
+  ]
+
+  # 3c. Apply the determined master rank to all nodes within that unit.
+  node_rank_map[master_ranks, on = "node_unit", final_rank := i.master_rank]
+
+  # --- 4. Assemble the final layout list ---
+  final_levels <- split(node_rank_map$id, f = node_rank_map$final_rank)
+
+  return(list(levels = final_levels, element_unit_map = data.table()))
+}
 
 
 # ------------------------------------------------------------------------------
@@ -695,9 +915,6 @@
   # --- 3. Transformation for Complex Structures (e.g., Moderation) ---
   all_nodes[!is.na(id_suffix) & nzchar(id_suffix), id := paste(id, id_suffix, sep = "_")]
 
-  # Final uniqueness check to remove duplicates created during melting
-  all_nodes <- unique(all_nodes, by = "id")
-
   return(all_nodes[, !"id_suffix"])
 }
 
@@ -723,40 +940,28 @@
 #' @keywords internal
 #' @noRd
 .assemble_edges_list <- function(param_table, rule, cols_to_keep) {
-  # 1. Safely get the indices of rows that match the rule's filter.
-  #    The `env` argument ensures the expression is evaluated in the
-  #    context of `param_table` without NSE pitfalls.
-  #    `.I` is a special `data.table` symbol that returns the row indices.
-  matching_row_indices <- param_table[, .I[.i], env = list(.i = rule$filter_expr)]
-
-  # 2. Guard Clause: If no rows match the filter, return an empty data.table
-  #    immediately. This prevents the transformation logic from running on an
-  #    empty set, which was the source of the "subscript out of bounds" error.
-  if (length(matching_row_indices) == 0) {
-    return(data.table::data.table())
-  }
-
-  # 3. Programmatically construct the `j` expression as a `call` object.
-  #    This is identical to the original implementation.
+  # 1. Programmatically construct the `j` expression as a `call` object.
   j_call <- as.call(c(
     quote(list),
+    # Define the new columns based on the rule's expressions
     list(
       from = rule$from_expr,
       to = rule$to_expr,
       edge_type = rule$edge_type,
       id_prefix = rule$id_prefix,
+      # The `label` column is taken directly if it exists
       label = quote(if ("label" %in% names(param_table)) as.character(label) else "")
     ),
+    # Add the original columns to keep
     lapply(cols_to_keep, as.name)
   ))
 
-  # 4. Execute the transformation ONLY on the pre-filtered rows.
-  #    We pass the calculated row indices to `i`, and the dynamic `j_call`
-  #    to `.j` via the `env` argument.
+  # 2. Execute the parameterized data.table call.
   param_table[
-    matching_row_indices,
+    .i,
     .j,
     env = list(
+      .i = rule$filter_expr,
       .j = j_call
     )
   ]
@@ -805,12 +1010,6 @@
 
   all_edges <- data.table::rbindlist(raw_edges_list, use.names = TRUE, fill = TRUE)
 
-  # Final Guard Clause: If after all rules, no edges were created, return
-  # the empty table before attempting to access columns that may not exist.
-  if (nrow(all_edges) == 0) {
-    return(all_edges)
-  }
-
   # Sanitize from/to columns after creation
   all_edges[, from := .sanitize_string(from)][, to := .sanitize_string(to)]
 
@@ -824,5 +1023,73 @@
   unique_cols <- intersect(c("id", group_cols), names(all_edges))
   all_edges <- unique(all_edges, by = unique_cols)
 
-  return(all_edges)
+  # return(all_edges)
+  return(.modify_moderated_edges(all_edges))
+}
+
+
+#' @title Modify Regression Edges for Moderation Effects
+#' @description This function identifies moderated regression paths and modifies
+#'   the `edges` table accordingly. It finds the simple regression edge that is
+#'   being moderated and retargets its `from` endpoint to the appropriate
+#'   anchor node (`*_path`).
+#'
+#' @param edges A `data.table` of all extracted edges.
+#' @param param_table The full `lavaan` parameter `data.table`.
+#'
+#' @return The `edges` `data.table`, modified in place, with regression edges
+#'   correctly updated to reflect moderation.
+#' @keywords internal
+#' @noRd
+#' @title Modify Regression Edges for Moderation Effects
+#' @description This function identifies moderated regression paths within the
+#'   `edges` table itself and modifies them. It finds the simple regression edge
+#'   that is being moderated and retargets its `from` endpoint to the
+#'   appropriate anchor node (`*_path`). This function is fully self-contained
+#'   and operates only on the `edges` table.
+#'
+#' @param edges A `data.table` of all extracted edges.
+#'
+#' @return The `edges` `data.table`, modified in place, with regression edges
+#'   correctly updated to reflect moderation.
+#' @keywords internal
+#' @noRd
+.modify_moderated_edges <- function(edges) {
+  # --- 1. Identify Moderation Edges ---
+  moderation_edges <- edges[edge_type == EDGE_TYPES$MODERATED_PATH_SEGMENT_2]
+
+  # --- 2. Guard Clause ---
+  # If there are no moderation effects, return the original table immediately.
+  if (nrow(moderation_edges) == 0) {
+    return(edges)
+  }
+
+  # --- 3. Create a Lookup Table for the Update Join ---
+  # This table maps the target simple regression (by its `from` and `to`) to
+  # the new `from` anchor and `edge_type` it should receive.
+  update_lookup <- moderation_edges[, .(
+    # The original predictor (e.g., "y1") is the part before the first underscore.
+    original_from = sapply(strsplit(from, "_"), `[`, 1),
+    to = to,
+    # The new values to assign.
+    new_from = from,
+    new_edge_type = edge_type
+  )]
+
+  # --- 4. Perform the data.table Update Join ---
+  # This single, declarative operation replaces the entire lapply loop.
+  # It finds matching rows in `edges` and updates their `from` and `edge_type`
+  # by reference. It's atomic, efficient, and highly readable.
+  edges[update_lookup,
+    on = .(from = original_from, to = to),
+    `:=`(from = i.new_from, edge_type = i.new_edge_type)
+  ]
+
+  # --- 5. Final Filtering ---
+  # Remove the original moderation edge rows, as their information has now been
+  # integrated into the main regression paths.
+  # Using an anti-join (`!`) is the canonical data.table way to do this.
+  final_edges <- edges[!moderation_edges, on = names(edges)]
+
+  return(final_edges)
 }

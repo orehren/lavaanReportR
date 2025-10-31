@@ -47,6 +47,9 @@
   prepared_data[layout_info, on = "id", `:=`(x = i.x, y = i.y)]
   prepared_data[, pos := paste0(x, ",", y, "!")]
 
+  # Remove the redundant x and y columns after creating the pos attribute
+  prepared_data[, `:=`(x = NULL, y = NULL)]
+
   prepared_data <- .apply_group_level_prefixes(prepared_data, "id", config)
 
   return(prepared_data)

@@ -172,6 +172,11 @@
   # --- 1. & 2. Initial Rank Calculation (bleibt unverändert) ---
   all_node_ids <- nodes$id
   directed_paths <- .collect_all_directed_paths(edges)
+
+  # CRITICAL FIX: Ensure all nodes are passed to the graph constructor.
+  # This includes nodes that may only be connected by non-directed paths
+  # (e.g., covariances) or are isolates, ensuring they are part of the
+  # layout process.
   unique_node_ids <- unique(all_node_ids)
 
   graph <- igraph::graph_from_data_frame(directed_paths, directed = TRUE, vertices = unique_node_ids)
@@ -218,48 +223,71 @@
   return(list(levels = final_levels, element_unit_map = data.table()))
 }
 
-.calculate_xy_layout <- function(nodes, edges) {
-  # 1. Determine hierarchical ranks
+.calculate_xy_layout <- function(nodes, edges, flow_direction = "LR") {
+  # --- 1. Initial Setup ---
   ranks <- .analyze_layout_structure(nodes, edges)
-  directed_paths <- .collect_all_directed_paths(edges)
 
-  # Convert ranks to a data.table for easier manipulation
   layout_dt <- data.table(
     id = unlist(ranks$levels, use.names = FALSE),
     rank = as.numeric(rep(names(ranks$levels), lengths(ranks$levels)))
   )
 
-  # 2. Assign initial deterministic x/y coordinates
-  median_rank <- median(unique(layout_dt$rank))
-  layout_dt[, y := -(rank - median_rank)]
-  setorder(layout_dt, y, id)
-  layout_dt[, x := seq(-.N/2 + 0.5, .N/2 - 0.5, by = 1), by = y]
+  # Merge with original node data to get type and unit info
+  layout_dt[nodes, on = "id", `:=`(
+    node_type = i.node_type,
+    node_unit = i.node_unit
+  )]
 
-  # 3. Iteratively refine x-coordinates using barycenter method
-  n_iterations <- 3
-  for (i in seq_len(n_iterations)) {
+  # --- 2. Primary Axis Coordinate Calculation (Grid Logic) ---
+  n_ranks <- data.table::uniqueN(layout_dt$rank)
+  median_rank <- (1 + n_ranks) / 2
+  section_size <- 3 # As specified
 
-    # Create a lookup for current x positions
-    pos_lookup <- setNames(layout_dt$x, layout_dt$id)
-
-    # Get parent and child positions
-    parents <- directed_paths[, .(parent_x = pos_lookup[from]), by = .(to = to)]
-    children <- directed_paths[, .(child_x = pos_lookup[to]), by = .(from = from)]
-
-    # Calculate barycenters
-    bary_parents <- parents[, .(barycenter = mean(parent_x, na.rm = TRUE)), by = .(id = to)]
-    bary_children <- children[, .(barycenter = mean(child_x, na.rm = TRUE)), by = .(id = from)]
-
-    # Merge barycenters, giving precedence to parent-based positioning
-    barycenters <- rbind(bary_parents, bary_children[!id %in% bary_parents$id])
-
-    # Update desired x-positions in the layout table
-    layout_dt[barycenters, on = "id", desired_x := i.barycenter]
-
-    # Re-sort and re-assign final x to avoid overlaps
-    setorder(layout_dt, y, desired_x, na.last = TRUE)
-    layout_dt[, x := seq(-.N/2 + 0.5, .N/2 - 0.5, by = 1), by = y]
+  # Assign primary coordinate based on rank and flow direction
+  if (flow_direction == "LR") {
+    layout_dt[, x := (rank - median_rank) * section_size]
+    primary_axis <- "x"
+    secondary_axis <- "y"
+  } else { # TB
+    layout_dt[, y := -(rank - median_rank) * section_size]
+    primary_axis <- "y"
+    secondary_axis <- "x"
   }
+
+  # --- 3. Secondary Axis Coordinate Calculation (Within-Rank) ---
+
+  # 3a. Barycenter Sorting
+  directed_paths <- .collect_all_directed_paths(edges)
+  pos_lookup <- setNames(layout_dt[[primary_axis]], layout_dt$id)
+
+  neighbors <- rbind(
+    directed_paths[, .(neighbor_pos = pos_lookup[from]), by = .(id = to)],
+    directed_paths[, .(neighbor_pos = pos_lookup[to]), by = .(id = from)]
+  )
+  barycenters <- neighbors[, .(barycenter = mean(neighbor_pos, na.rm = TRUE)), by = id]
+
+  layout_dt[barycenters, on = "id", barycenter := i.barycenter]
+
+  # 3b. Cluster Sizing and Positioning
+  # Calculate how many satellites each main node has
+  layout_dt[node_type %in% c("variance", "intercept"), satellite_count := .N, by = node_unit]
+  main_nodes <- layout_dt[node_type == "manifest" | node_type == "latent"]
+  setorder(main_nodes, rank, barycenter)
+
+  # Assign evenly spaced positions to the main nodes (clusters)
+  main_nodes[, (secondary_axis) := seq(-.N/2 + 0.5, .N/2 - 0.5, by = 1) * 2, by = rank]
+
+  # Merge the calculated secondary positions back into the main layout table
+  layout_dt[main_nodes, on = "id", (secondary_axis) := mget(paste0("i.", secondary_axis))]
+
+  # Fill down the secondary coordinate for satellite nodes from their main node
+  layout_dt[, (secondary_axis) := zoo::na.locf(.SD[[1]], na.rm = FALSE), by = node_unit, .SDcols = secondary_axis]
+
+  # --- 4. Satellite Node Placement ---
+  # Apply a fixed offset to satellite nodes along the secondary axis
+  offset <- 0.5
+  layout_dt[node_type == "variance", (secondary_axis) := .SD[[1]] + offset, .SDcols = secondary_axis]
+  layout_dt[node_type == "intercept", (secondary_axis) := .SD[[1]] - offset, .SDcols = secondary_axis]
 
   return(layout_dt[, .(id, x, y)])
 }
@@ -277,8 +305,12 @@ layout.lavaan_plot_config <- function(x, ...) {
   config <- x
   analyzed_model <- config$analyzed_model
 
-  # layout <- .analyze_layout_structure(analyzed_model$nodes, analyzed_model$edges)
-  layout <- .calculate_xy_layout(analyzed_model$nodes, analyzed_model$edges)
+  # Pass the rankdir from the recipe to the new flow_direction argument
+  layout <- .calculate_xy_layout(
+    nodes = analyzed_model$nodes,
+    edges = analyzed_model$edges,
+    flow_direction = config$recipe$rankdir
+  )
 
   .new_lavaan_layout(
     config = config,

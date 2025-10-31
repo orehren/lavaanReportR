@@ -695,6 +695,9 @@
   # --- 3. Transformation for Complex Structures (e.g., Moderation) ---
   all_nodes[!is.na(id_suffix) & nzchar(id_suffix), id := paste(id, id_suffix, sep = "_")]
 
+  # Final uniqueness check to remove duplicates created during melting
+  all_nodes <- unique(all_nodes, by = "id")
+
   return(all_nodes[, !"id_suffix"])
 }
 

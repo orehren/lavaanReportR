@@ -5,10 +5,10 @@ library(data.table)
 library(purrr) # compact() is from purrr
 
 # Load internal data
-load("R/sysdata.rda")
+load("../../R/sysdata.rda")
 
 # Source all R files from the correct path
-lapply(list.files("R", pattern = "\\.R$", full.names = TRUE), source)
+lapply(list.files("../../R", pattern = "\\.R$", full.names = TRUE), source)
 
 # Define the parameter tables provided by the user, using simple character vectors for 'op'
 pt_moderation_simple <- data.table(

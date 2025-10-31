@@ -31,6 +31,20 @@
 }
 
 
+#' @title Constructor for the `lavaan_layout` Class
+#' @description Creates a `lavaan_layout` object by adding the class name to an
+#'   existing object (typically a `lavaan_graph` object that has been enriched
+#'   with layout data).
+#' @param x The `lavaan_graph` object to be promoted.
+#' @return A `lavaan_layout` object.
+#' @keywords internal
+#' @noRd
+lavaan_layout <- function(x) {
+  class(x) <- c("lavaan_layout", class(x))
+  x
+}
+
+
 ###################################################
 
 

@@ -39,9 +39,14 @@
 #' @return A `lavaan_layout` object.
 #' @keywords internal
 #' @noRd
-lavaan_layout <- function(x) {
-  class(x) <- c("lavaan_layout", class(x))
-  x
+.new_lavaan_layout <- function(config, layout) {
+  structure(
+    list(
+      config = config,
+      layout = layout
+    ),
+    class = "lavaan_layout"
+  )
 }
 
 

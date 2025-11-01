@@ -48,7 +48,7 @@
     id = unlist(layout_info$levels, use.names = FALSE),
     rank = rep(names(layout_info$levels), lengths(layout_info$levels))
   )
-  prepared_data[layout_map, on = "id", rank := i.rank]
+  prepared_data[layout_map, on = "id", rank := as.integer(i.rank)]
 
   if (nrow(layout_info$element_unit_map) > 0) {
     prepared_data[layout_info$element_unit_map,

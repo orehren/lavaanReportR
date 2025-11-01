@@ -148,6 +148,22 @@ configure_plot.lavaan_model_structure <- function(x,
 # SECTION: WORKFLOW - PREPARATION PHASE
 # ==============================================================================
 
+#' @title Prepare Final Data for Plotting (from layout)
+#' @description This method handles the output of the `layout` phase. It extracts
+#'   the configuration object and passes it to the primary `prepare` method.
+#' @param x An object of class \code{lavaan_layout}.
+#' @param ... Not used.
+#' @return A \code{lavaan_graph} object.
+#' @keywords internal
+#' @exportS3Method lavaanReportR::prepare
+#' @noRd
+prepare.lavaan_layout <- function(x, ...) {
+  # This method serves as a bridge: it unpacks the config object from the
+  # lavaan_layout object and passes it to the next method in the chain.
+  prepare(x$config)
+}
+
+
 #' @title Prepare Final Data for Plotting
 #' @description This is the third phase of the `lavaanReportR` workflow. The
 #'   `prepare` function takes the `lavaan_plot_config` object and applies all
@@ -162,7 +178,6 @@ configure_plot.lavaan_model_structure <- function(x,
 #' @param ... Not used.
 #' @return A \code{lavaan_graph} object containing the final, build-ready
 #'   data.tables for nodes and edges, along with the final recipe.
-#' @exportS3Method lavaanReportR::prepare
 #' @examples
 #' \dontrun{
 #'   # Assuming 'plot_config' is from the configure_plot() step

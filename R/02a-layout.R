@@ -19,19 +19,20 @@ layout <- function(object, ...) {
 #'   node using a custom, deterministic grid-based algorithm.
 #' @param object A `lavaan_graph` object.
 #' @param ... Additional arguments (not currently used).
-#' @return A `lavaan_layout` object, which is the original `lavaan_plot_config` object
-#'   with the calculated layout data (`$nodes_layout_coords`) added.
+#' @return A `lavaan_layout` object containing the original configuration and
+#'   the new layout coordinates.
 #' @keywords internal
+#' @exportS3Method lavaanReportR::layout
 #' @noRd
 layout.lavaan_plot_config <- function(object, ...) {
-  # 1. Call the core layout algorithm
-  nodes_layout_coords <- .calculate_xy_layout(object$nodes, object$edges)
+  # 1. Call the core layout algorithm using the correct data paths
+  nodes_layout_coords <- .calculate_xy_layout(
+    nodes = object$analyzed_model$nodes,
+    edges = object$analyzed_model$edges
+  )
 
-  # 2. Store the results in the object
-  object$nodes_layout_coords <- nodes_layout_coords
-
-  # 3. Create and return the new lavaan_layout object
-  lavaan_layout(object)
+  # 2. Create and return the new lavaan_layout object using the constructor
+  .new_lavaan_layout(config = object, layout = nodes_layout_coords)
 }
 
 # ==============================================================================
@@ -61,55 +62,46 @@ layout.lavaan_plot_config <- function(object, ...) {
   }
 
   # --- 2. Grid & X-Coordinate Calculation ---
-  # Each rank gets a fixed-width column on the grid.
-  # The layout is centered around the median rank, which becomes x=0.
   median_rank <- stats::median(unique(nodes$rank), na.rm = TRUE)
   nodes[, x := (rank - median_rank) * 3]
 
-  # --- 3. Secondary Axis (Y-Coordinate) Calculation ---
-  # This is done rank by rank, using barycenter to sort nodes.
+  # --- 3. Secondary Axis (Y-Coordinate) Calculation with Barycenter ---
   nodes[, y := as.numeric(NA)]
-  setorder(nodes, rank)
+  nodes[, barycenter := as.numeric(NA)]
+  for (r in sort(unique(nodes$rank))) {
+    current_nodes_ids <- nodes[rank == r, id]
+    parent_edges <- edges[to %in% current_nodes_ids]
 
-  # Pre-calculate barycenter values for all nodes
-  edges_for_bary <- nodes[edges, on = .(id = to), .(from, x.to = i.x, y.to = i.y, x.from = x, y.from = y)]
-  bary_lookup <- edges_for_bary[!is.na(y.from), .(barycenter = mean(y.from)), by = .(to = from)]
+    if (nrow(parent_edges) > 0) {
+      parent_edges[nodes, on = .(from = id), parent_y := i.y]
+      bary_lookup <- parent_edges[!is.na(parent_y), .(barycenter = mean(parent_y)), by = to]
+      nodes[bary_lookup, on = .(id = to), barycenter := i.barycenter]
+    }
 
-  # Iterate through each rank to set y-coordinates
-  for (r in unique(nodes$rank)) {
-    current_rank_nodes <- nodes[rank == r]
+    # Fallback for nodes without parents (e.g., in the first rank)
+    nodes[rank == r & is.na(barycenter), barycenter := 0]
 
-    # Get barycenter values for nodes in this rank
-    current_rank_nodes[bary_lookup, on = .(id = to), barycenter := i.barycenter]
-
-    # Sort main nodes by barycenter to minimize crossings
-    # Use zoo::na.locf to propagate the last observed barycenter for initial ranks
-    main_nodes <- current_rank_nodes[node_type %in% c("latent", "manifest")]
-    main_nodes[, barycenter := zoo::na.locf(barycenter, na.rm = FALSE, fromLast = TRUE)]
-    main_nodes[is.na(barycenter), barycenter := 0]
-    setorder(main_nodes, barycenter)
-
-    # Assign initial Y-positions to main nodes, creating space
-    y_pos <- seq(from = 0, by = 2, length.out = nrow(main_nodes))
-    y_pos <- y_pos - mean(y_pos) # Center them around y=0
-    main_nodes[, y := y_pos]
-
-    # Update the main nodes table with the new y-coordinates
-    nodes[main_nodes, on = "id", y := i.y]
-
-    # Place satellite nodes (variances, intercepts) relative to their main node
-    satellite_nodes <- current_rank_nodes[!node_type %in% c("latent", "manifest")]
-    satellite_nodes[nodes, on = .(node_unit = node_unit, node_type = "main_node_placeholder"), parent_y := i.y] # This join needs fixing
-
-    # A better way to get parent_y
-    parent_y_lookup <- nodes[node_type %in% c("latent", "manifest"), .(node_unit, parent_y = y)]
-    satellite_nodes[parent_y_lookup, on = "node_unit", parent_y := i.parent_y]
-
-    satellite_nodes[node_type == "variance", y := parent_y - 0.5]
-    satellite_nodes[node_type == "intercept", y := parent_y + 0.5]
-
-    nodes[satellite_nodes, on = "id", y := i.y]
+    # Sort nodes within the rank by barycenter and assign y-coordinates
+    setorder(nodes, rank, barycenter)
+    nodes[rank == r, y := (seq_len(.N) - (.N + 1) / 2) * 2]
   }
+
+  # --- 4. Satellite Node Placement ---
+  # This must happen *after* all main nodes have their final Y-positions.
+  main_nodes_lookup <- nodes[node_type %in% c("latent", "manifest"), .(node_unit, parent_y = y)]
+  nodes[main_nodes_lookup, on = .(node_unit), parent_y_for_sort := i.parent_y]
+  setorder(nodes, rank, parent_y_for_sort, node_type)
+
+  for (unit in unique(nodes[!is.na(node_unit), node_unit])) {
+      main_node_y <- nodes[node_unit == unit & node_type %in% c("latent", "manifest"), y]
+      if(length(main_node_y) > 0 && !is.na(main_node_y)){
+        nodes[node_unit == unit & node_type == "variance", y := main_node_y - 0.5]
+        nodes[node_unit == unit & node_type == "intercept", y := main_node_y + 0.5]
+      }
+  }
+
+  # Clean up temporary columns before returning
+  nodes[, c("barycenter", "parent_y_for_sort") := NULL]
 
   return(nodes[, .(id, x, y)])
 }

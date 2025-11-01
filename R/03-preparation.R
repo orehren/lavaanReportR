@@ -13,7 +13,7 @@
 #'   necessary analysis and style attributes for the build phase.
 #' @keywords internal
 #' @noRd
-.prepare_nodes_for_build <- function(config) {
+.prepare_nodes_for_build <- function(config, layout_coords) {
   # --- 1. Initial Setup ---
   # Start with a full, clean copy of the analyzed node data.
   prepared_data <- copy(config$analyzed_model$nodes)
@@ -43,6 +43,10 @@
   # --- 5. Styling, Layout Enrichment, and Prefixing ---
   prepared_data <- .apply_node_styling(prepared_data, config$recipe)
 
+  # Join the calculated x/y coordinates
+  prepared_data[layout_coords, on = "id", `:=`(x = i.x, y = i.y)]
+
+  # Join the original rank and element unit info
   layout_info <- config$analyzed_model$layout
   layout_map <- data.table(
     id = unlist(layout_info$levels, use.names = FALSE),

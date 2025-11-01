@@ -148,25 +148,9 @@ configure_plot.lavaan_model_structure <- function(x,
 # SECTION: WORKFLOW - PREPARATION PHASE
 # ==============================================================================
 
-#' @title Prepare Final Data for Plotting (from layout)
-#' @description This method handles the output of the `layout` phase. It extracts
-#'   the configuration object and passes it to the primary `prepare` method.
-#' @param x An object of class \code{lavaan_layout}.
-#' @param ... Not used.
-#' @return A \code{lavaan_graph} object.
-#' @keywords internal
-#' @exportS3Method lavaanReportR::prepare
-#' @noRd
-prepare.lavaan_layout <- function(x, ...) {
-  # This method serves as a bridge: it unpacks the config object from the
-  # lavaan_layout object and passes it to the next method in the chain.
-  prepare(x$config)
-}
-
-
 #' @title Prepare Final Data for Plotting
 #' @description This is the third phase of the `lavaanReportR` workflow. The
-#'   `prepare` function takes the `lavaan_plot_config` object and applies all
+#'   `prepare` function now takes a `lavaan_layout` object and applies all
 #'   styling, labeling, and filtering rules to produce the final, "build-ready"
 #'   data tables for nodes and edges.
 #' @details
@@ -174,23 +158,24 @@ prepare.lavaan_layout <- function(x, ...) {
 #' model structure with the aesthetic settings from the configuration, resulting
 #' in a `lavaan_graph` object that contains everything needed to build the DOT code.
 #' @seealso \code{\link{analyze}}, \code{\link{configure_plot}}, \code{\link{build}}, \code{\link{render}}
-#' @param x An object of class \code{lavaan_plot_config}.
+#' @param x An object of class \code{lavaan_layout}.
 #' @param ... Not used.
 #' @return A \code{lavaan_graph} object containing the final, build-ready
 #'   data.tables for nodes and edges, along with the final recipe.
+#' @exportS3Method lavaanReportR::prepare
 #' @examples
 #' \dontrun{
-#'   # Assuming 'plot_config' is from the configure_plot() step
-#'   prepared_graph <- prepare(plot_config)
+#'   # Assuming 'layout_object' is from the layout() step
+#'   prepared_graph <- prepare(layout_object)
 #' }
-prepare.lavaan_plot_config <- function(x, ...) {
-  config <- x
+prepare.lavaan_layout <- function(x, ...) {
+  # Unpack the config and layout from the input object
+  config <- x$config
+  layout_coords <- x$layout
 
   # --- The Enrichment Pipelines ---
-  # We now run two separate, parallel pipelines: one for nodes and one for edges.
-  # This aligns with the architectural principle of creating distinct, build-ready
-  # data structures for each type of graph element.
-  prepared_nodes <- .prepare_nodes_for_build(config)
+  # Run the original preparation logic, now passing the new layout coords
+  prepared_nodes <- .prepare_nodes_for_build(config, layout_coords)
   prepared_edges <- .prepare_edges_for_build(config)
 
   # --- Final Assembly of lavaan_graph object ---

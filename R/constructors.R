@@ -31,6 +31,22 @@
 }
 
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+#' @title Constructor for the `lavaan_layout` Class
+#' @description Creates a `lavaan_layout` object by adding the class name to an
+#'   existing object (typically a `lavaan_graph` object that has been enriched
+#'   with layout data).
+#' @param x The `lavaan_graph` object to be promoted.
+#' @return A `lavaan_layout` object.
+#' @keywords internal
+#' @noRd
+lavaan_layout <- function(x) {
+  class(x) <- c("lavaan_layout", class(x))
+  x
+=======
+>>>>>>> restore
 #' @title Internal S3 constructor for a `lavaan_layout` object.
 #' @description Creates the container for the results of the `layout` phase.
 #' @param ... A named list of layout results.
@@ -38,6 +54,10 @@
 #' @keywords internal
 .new_lavaan_layout <- function(...) {
   structure(list(...), class = "lavaan_layout")
+<<<<<<< HEAD
+=======
+>>>>>>> a663b19 (Revert "feat(analysis, build): Clean up dot attributes and fix defined path IDs")
+>>>>>>> restore
 }
 
 

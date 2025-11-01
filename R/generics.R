@@ -36,6 +36,20 @@ layout <- function(object, ...) {
 }
 
 
+#' @title Calculate Layout for a Plot
+#' @description A generic S3 function that dispatches to a specific method to
+#'   calculate the visual layout of the graph based on the model structure and
+#'   configuration.
+#' @param x The configured object to process.
+#' @param ... Additional arguments passed to methods.
+#' @return A "layout" object, containing the calculated layout information.
+#' @keywords internal
+#' @export
+layout <- function(x, ...) {
+  UseMethod("layout")
+}
+
+
 ##############################################################
 
 

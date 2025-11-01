@@ -8,12 +8,13 @@
 #'   layout enrichment, and prefixing logic.
 #'
 #' @param config The final `lavaan_plot_config` object.
+#' @param layout_info The calculated layout information from the `layout` phase.
 #'
 #' @return A data.table where each row is a fully prepared node, containing all
 #'   necessary analysis and style attributes for the build phase.
 #' @keywords internal
 #' @noRd
-.prepare_nodes_for_build <- function(config) {
+.prepare_nodes_for_build <- function(config, layout_info) {
   # --- 1. Initial Setup ---
   # Start with a full, clean copy of the analyzed node data.
   prepared_data <- copy(config$analyzed_model$nodes)
@@ -43,31 +44,13 @@
   # --- 5. Styling, Layout Enrichment, and Prefixing ---
   prepared_data <- .apply_node_styling(prepared_data, config$recipe)
 
-  layout_info <- config$analyzed_model$layout
-  layout_map <- data.table(
-    id = unlist(layout_info$levels, use.names = FALSE),
-    rank = rep(names(layout_info$levels), lengths(layout_info$levels))
-  )
-  prepared_data[layout_map, on = "id", rank := i.rank]
+  prepared_data[layout_info, on = "id", `:=`(x = i.x, y = i.y)]
+  prepared_data[, pos := paste0(x, ",", y, "!")]
 
-  if (nrow(layout_info$element_unit_map) > 0) {
-    prepared_data[layout_info$element_unit_map,
-      on = "id",
-      `:=`(element_unit = i.element_unit, element_unit_order = i.element_unit_order)
-    ]
-  }
+  # Remove the redundant x and y columns after creating the pos attribute
+  prepared_data[, `:=`(x = NULL, y = NULL)]
 
   prepared_data <- .apply_group_level_prefixes(prepared_data, "id", config)
-
-  # --- 6. Final Sorting for Deterministic Layout ---
-  # This is the new, correct location for the sorting logic.
-  # It ensures the data passed to the build phase is already in the final order.
-  if ("rank" %in% names(prepared_data)) {
-    data.table::setorderv(
-      prepared_data,
-      cols = c("rank", "node_unit")
-    )
-  }
 
   return(prepared_data)
 }
@@ -449,4 +432,32 @@
     # Use sprintf to apply the parentheses. This is clean and non-nested.
     sprintf("(%s)", collapsed_mediators)
   })
+}
+
+#' @title Prepare Final Data for Plotting
+#' @description This is the fourth phase of the `lavaanReportR` workflow. The
+#'   `prepare` function takes the `lavaan_layout` object and applies all
+#'   styling, labeling, and filtering rules to produce the final, "build-ready"
+#'   data tables for nodes and edges.
+#' @param x An object of class \code{lavaan_layout}.
+#' @param ... Not used.
+#' @return A \code{lavaan_graph} object containing the final, build-ready
+#'   data.tables for nodes and edges, along with the final recipe.
+#' @exportS3Method lavaanReportR::prepare
+prepare.lavaan_layout <- function(x, ...) {
+  layout_obj <- x
+  config <- layout_obj$config
+  layout_info <- layout_obj$layout
+
+  # --- The Enrichment Pipelines ---
+  prepared_nodes <- .prepare_nodes_for_build(config, layout_info)
+  prepared_edges <- .prepare_edges_for_build(config)
+
+  # --- Final Assembly of lavaan_graph object ---
+  .new_lavaan_graph(
+    nodes = prepared_nodes,
+    edges = prepared_edges,
+    recipe = config$recipe,
+    user_args = config$user_args
+  )
 }

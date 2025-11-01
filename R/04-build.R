@@ -70,9 +70,7 @@
   by_vars <- "id"
   meta_cols <- c(
     "node_unit", "node_type", "group", "level", "sig", "est.std",
-    "est.unstd", "rank", "element_unit", "element_unit_order",
-    # Add all other data columns that are not dot attributes
-    "lhs", "op", "rhs", "block", "pvalue.unstd", "pvalue.std"
+    "est.unstd", "rank", "element_unit", "element_unit_order"
   )
 
   # 2. Rufe den generischen Helper auf.
@@ -100,9 +98,7 @@
   by_vars <- c("from", "to", "edge_type")
   meta_cols <- c(
     "id_prefix", "edge_type", "group", "level", "sig",
-    "est.std", "est.unstd", "mediators", "base_paths",
-    # Add all other data columns that are not dot attributes
-    "lhs", "op", "rhs", "block", "pvalue.unstd", "pvalue.std"
+    "est.std", "est.unstd", "mediators", "base_paths"
   )
 
   # 2. Rufe den generischen Helper auf.
@@ -112,29 +108,6 @@
   final_dt <- aggregated_attrs[edges_dt, on = by_vars] # c("from", "to", "edge_type")
   return(final_dt[, sprintf("%s -> %s [%s];", from, to, attr_string)])
 }
-
-#' @title Build DOT statements for rank assignments (NEU)
-#' @description Groups nodes by their rank and creates `{rank=same; ...}`
-#'   statements to enforce the hierarchical layout in Graphviz.
-#' @param nodes_dt The final nodes `data.table`, which must contain a `rank` column.
-#' @return A character vector of DOT rank statements.
-#' @keywords internal
-#' @noRd
-.build_rank_statements <- function(nodes_dt) {
-  # Robuste Guard Clause: Prüft auf Existenz der Spalte und Inhalt.
-  if (!"rank" %in% names(nodes_dt) || nrow(nodes_dt) == 0) {
-    return(character(0))
-  }
-
-  # 1. Gruppiere die Node-IDs nach ihrem Rang.
-  rank_groups <- nodes_dt[, .(
-    nodes_str = paste(id, collapse = "; ")
-  ), by = rank]
-
-  # 2. Wende die vektorisierte sprintf-Operation auf das aggregierte Ergebnis an.
-  rank_groups[, sprintf("{ rank=same; %s };", nodes_str)]
-}
-
 
 #' @title Build global graph attribute statements
 #' @description Creates the initial DOT statements for global graph attributes
@@ -146,7 +119,7 @@
 .build_graph_statements <- function(recipe) {
   c(
     "digraph SEM {",
-    "graph [layout=neato, rankdir=%s, splines=spline];" |> sprintf(recipe$rankdir),
+    "graph [layout=neato, rankdir=%s, splines=spline, nodesep=0.1, ranksep=0.5];" |> sprintf(recipe$rankdir),
     "node [fontname='Helvetica', fontsize = 8, width = 0.3, height = 0.3, fixedsize = TRUE];",
     "edge [fontname='Helvetica', fontsize=11, style = 'solid', arrowhead = 'normal', penwidth = 1.5, arrowsize=0.5];"
   )

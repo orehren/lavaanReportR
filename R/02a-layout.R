@@ -19,11 +19,11 @@ layout <- function(object, ...) {
 #'   node using a custom, deterministic grid-based algorithm.
 #' @param object A `lavaan_graph` object.
 #' @param ... Additional arguments (not currently used).
-#' @return A `lavaan_layout` object, which is the original `lavaan_graph` object
+#' @return A `lavaan_layout` object, which is the original `lavaan_plot_config` object
 #'   with the calculated layout data (`$nodes_layout_coords`) added.
 #' @keywords internal
 #' @noRd
-layout.lavaan_graph <- function(object, ...) {
+layout.lavaan_plot_config <- function(object, ...) {
   # 1. Call the core layout algorithm
   nodes_layout_coords <- .calculate_xy_layout(object$nodes, object$edges)
 

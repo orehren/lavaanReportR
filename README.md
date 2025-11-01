@@ -16,14 +16,13 @@ devtools::install_github("orehren/lavaanReportR")
 
 ## Usage
 
-The core workflow of `lavaanReportR` is a six-step pipeline:
+The core workflow of `lavaanReportR` is a five-step pipeline:
 
 1.  **`analyze()`**: Extracts the model structure from a `lavaan` parameter table.
 2.  **`configure_plot()`**: Customizes the plot's appearance.
-3.  **`layout()`**: Calculates the visual layout of the graph.
-4.  **`prepare()`**: Prepares the final data for plotting.
-5.  **`build()`**: Constructs the DOT code for the plot.
-6.  **`render()`**: Renders the final plot.
+3.  **`prepare()`**: Prepares the final data for plotting.
+4.  **`build()`**: Constructs the DOT code for the plot.
+5.  **`render()`**: Renders the final plot.
 
 Here's a basic example of how to use the package:
 
@@ -50,7 +49,6 @@ param_table <- parameterEstimates(fit)
 param_table |>
   analyze() |>
   configure_plot() |>
-  layout() |>
   prepare() |>
   build() |>
   render()

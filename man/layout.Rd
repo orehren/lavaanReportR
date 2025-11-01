@@ -4,35 +4,17 @@
 \alias{layout}
 \title{Calculate Node Layout Coordinates}
 \usage{
-layout(x, ...)
-
-layout(x, ...)
-
-layout(x, ...)
+layout(object, ...)
 }
 \arguments{
-\item{x}{The configured object to process.}
-
-\item{...}{Additional arguments passed to methods.}
-
 \item{object}{An object representing the graph to be laid out.}
+
+\item{...}{Additional arguments passed to specific methods.}
 }
 \value{
 A new object with layout information added.
-
-A "layout" object, containing the calculated layout information.
-
-A "layout" object, containing the calculated layout information.
 }
 \description{
 An S3 generic for calculating the x/y coordinates for graph nodes.
-
-A generic S3 function that dispatches to a specific method to
-  calculate the visual layout of the graph based on the model structure and
-  configuration.
-
-A generic S3 function that dispatches to a specific method to
-  calculate the visual layout of the graph based on the model structure and
-  configuration.
 }
 \keyword{internal}

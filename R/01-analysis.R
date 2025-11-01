@@ -368,8 +368,8 @@
   # Recursively call this function for each component.
   result_list <- lapply(parts, .resolve_to_path_labels, dt = dt)
 
-  # Collect and return all unique atomic parts.
-  return(unique(unlist(result_list)))
+  # Collect and return all atomic parts.
+  return(unlist(result_list))
 }
 
 
@@ -395,9 +395,16 @@
 #' @noRd
 .deconstruct_defined_paths <- function(defined_params, direct_paths, full_param_table) {
   # Deconstruct each defined parameter's formula into a long list of base path labels
-  deconstructed_long <- defined_params[, .(
-    base_path_label = unlist(lapply(label, .resolve_to_path_labels, dt = full_param_table))
-  ), by = .(defined_label = label)]
+  deconstructed_long <- defined_params[,
+    {
+      base_labels <- .resolve_to_path_labels(label, full_param_table)
+      .(
+        base_path_label = base_labels,
+        base_path_order = seq_along(base_labels)
+      )
+    },
+    by = .(defined_label = label)
+  ]
 
   # Join the `from` and `to` information for each base path.
   # This is a left join, keeping all deconstructed paths and adding structure info.
@@ -425,19 +432,19 @@
 #' @keywords internal
 #' @noRd
 .aggregate_path_structure <- function(paths_with_structure) {
-  paths_with_structure[,
-    {
-      all_nodes <- unique(c(from, to))
-      start_nodes <- setdiff(from, to)
-      end_nodes <- setdiff(to, from)
+  # Sort by the explicit order to ensure correctness
+  setorder(paths_with_structure, defined_label, base_path_order)
 
-      .(
-        from = start_nodes,
-        to = end_nodes,
-        mediators = list(setdiff(all_nodes, c(start_nodes, end_nodes))),
-        base_paths = list(unique(base_path_label))
-      )
-    },
+  paths_with_structure[,
+    .(
+      # The start node is the `from` of the FIRST path segment.
+      from = from[1],
+      # The end node is the `to` of the LAST path segment.
+      to = to[.N],
+      # Mediators are all nodes excluding the definitive start and end nodes.
+      mediators = list(setdiff(unique(c(from, to)), c(from[1], to[.N]))),
+      base_paths = list(unique(base_path_label))
+    ),
     by = .(defined_label)
   ]
 }
@@ -472,7 +479,7 @@
 
   # Clean up the final column names and create the unique ID.
   setnames(final_data, "defined_label", "label")
-  final_data[, id := paste(substr(edge_type, 1, 3), .sanitize_string(label), sep = "_")]
+  final_data[, id := paste(substr(edge_type, 1, 3), .sanitize_string(label), from, to, sep = "_")]
 
   return(final_data)
 }
@@ -875,7 +882,6 @@
   id_vars_for_melt <- names(param_table)[!names(param_table) %in% c("lhs", "rhs")]
   primary_vars_long <- data.table::melt(param_table, id.vars = id_vars_for_melt, measure.vars = c("lhs", "rhs"), variable.name = "source_col", value.name = "variable", na.rm = TRUE)[, variable := as.character(variable)]
 
-  print(primary_vars_long)
   # Create the unique source table. Each row is a unique combination of a
   # variable and its role (`op`) within each group. This is the single
   # source of truth for the factory.

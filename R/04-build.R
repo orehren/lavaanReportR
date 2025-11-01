@@ -70,7 +70,9 @@
   by_vars <- "id"
   meta_cols <- c(
     "node_unit", "node_type", "group", "level", "sig", "est.std",
-    "est.unstd", "rank", "element_unit", "element_unit_order"
+    "est.unstd", "rank", "element_unit", "element_unit_order",
+    # Add all other data columns that are not dot attributes
+    "lhs", "op", "rhs", "block", "pvalue.unstd", "pvalue.std"
   )
 
   # 2. Rufe den generischen Helper auf.
@@ -98,7 +100,9 @@
   by_vars <- c("from", "to", "edge_type")
   meta_cols <- c(
     "id_prefix", "edge_type", "group", "level", "sig",
-    "est.std", "est.unstd", "mediators", "base_paths"
+    "est.std", "est.unstd", "mediators", "base_paths",
+    # Add all other data columns that are not dot attributes
+    "lhs", "op", "rhs", "block", "pvalue.unstd", "pvalue.std"
   )
 
   # 2. Rufe den generischen Helper auf.
@@ -142,7 +146,7 @@
 .build_graph_statements <- function(recipe) {
   c(
     "digraph SEM {",
-    "graph [layout=dot, rankdir=%s, splines=spline, nodesep=0.1, ranksep=0.5];" |> sprintf(recipe$rankdir),
+    "graph [layout=neato, rankdir=%s, splines=spline];" |> sprintf(recipe$rankdir),
     "node [fontname='Helvetica', fontsize = 8, width = 0.3, height = 0.3, fixedsize = TRUE];",
     "edge [fontname='Helvetica', fontsize=11, style = 'solid', arrowhead = 'normal', penwidth = 1.5, arrowsize=0.5];"
   )

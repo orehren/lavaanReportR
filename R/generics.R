@@ -24,6 +24,17 @@ configure_plot <- function(x, ...) {
   UseMethod("configure_plot")
 }
 
+#' @title Calculate Node Layout Coordinates
+#' @description An S3 generic for calculating the x/y coordinates for graph nodes.
+#' @param object An object representing the graph to be laid out.
+#' @param ... Additional arguments passed to specific methods.
+#' @return A new object with layout information added.
+#' @keywords internal
+#' @export
+layout <- function(object, ...) {
+  UseMethod("layout")
+}
+
 
 ##############################################################
 

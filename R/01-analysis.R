@@ -472,7 +472,13 @@
 
   # Clean up the final column names and create the unique ID.
   setnames(final_data, "defined_label", "label")
-  final_data[, id := paste(substr(edge_type, 1, 3), .sanitize_string(label), sep = "_")]
+  final_data[, id := paste(
+    substr(edge_type, 1, 3),
+    .sanitize_string(label),
+    .sanitize_string(from),
+    .sanitize_string(to),
+    sep = "_"
+  )]
 
   return(final_data)
 }
@@ -662,7 +668,6 @@
   id_vars_for_melt <- names(param_table)[!names(param_table) %in% c("lhs", "rhs")]
   primary_vars_long <- data.table::melt(param_table, id.vars = id_vars_for_melt, measure.vars = c("lhs", "rhs"), variable.name = "source_col", value.name = "variable", na.rm = TRUE)[, variable := as.character(variable)]
 
-  print(primary_vars_long)
   # Create the unique source table. Each row is a unique combination of a
   # variable and its role (`op`) within each group. This is the single
   # source of truth for the factory.

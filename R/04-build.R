@@ -119,7 +119,7 @@
 .build_graph_statements <- function(recipe) {
   c(
     "digraph SEM {",
-    "graph [layout=neato, rankdir=%s, splines=spline, nodesep=0.1, ranksep=0.5];" |> sprintf(recipe$rankdir),
+    "graph [layout=neato, rankdir=%s, splines=spline];" |> sprintf(recipe$rankdir),
     "node [fontname='Helvetica', fontsize = 8, width = 0.3, height = 0.3, fixedsize = TRUE];",
     "edge [fontname='Helvetica', fontsize=11, style = 'solid', arrowhead = 'normal', penwidth = 1.5, arrowsize=0.5];"
   )

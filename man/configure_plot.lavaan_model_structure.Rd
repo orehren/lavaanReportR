@@ -75,7 +75,7 @@ This is the second phase of the `lavaanReportR` workflow. The
 \details{
 This function acts as the central control panel for customizing the plot's
 appearance. All arguments are optional and will fall back to sensible defaults.
-The result is a complete configuration blueprint that guides the `prepare` phase.
+The result is a complete configuration blueprint that guides the `layout` and `prepare` phases.
 }
 \examples{
 \dontrun{
@@ -86,5 +86,5 @@ The result is a complete configuration blueprint that guides the `prepare` phase
 }
 }
 \seealso{
-\code{\link{analyze}}, \code{\link{prepare}}, \code{\link{build}}, \code{\link{render}}
+\code{\link{analyze}}, \code{\link{layout}}, \code{\link{prepare}}, \code{\link{build}}, \code{\link{render}}
 }

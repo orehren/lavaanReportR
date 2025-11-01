@@ -1,7 +1,4 @@
 # ==============================================================================
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
 # SECTION: S3 METHOD FOR LAYOUT CALCULATION
 # ==============================================================================
 
@@ -115,8 +112,7 @@ layout.lavaan_graph <- function(object, ...) {
   }
 
   return(nodes[, .(id, x, y)])
-=======
->>>>>>> restore
+
 # SECTION: LAYOUT HELPERS
 # ==============================================================================
 
@@ -434,8 +430,4 @@ layout.lavaan_plot_config <- function(x, ...) {
     config = config,
     layout = layout
   )
-<<<<<<< HEAD
-=======
->>>>>>> a663b19 (Revert "feat(analysis, build): Clean up dot attributes and fix defined path IDs")
->>>>>>> restore
 }

@@ -112,6 +112,7 @@ layout.lavaan_graph <- function(object, ...) {
   }
 
   return(nodes[, .(id, x, y)])
+}
 
 # SECTION: LAYOUT HELPERS
 # ==============================================================================

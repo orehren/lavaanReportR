@@ -56,7 +56,9 @@ layout.lavaan_graph <- function(object, ...) {
     warning("A cycle was detected in the model graph. Layout may be incorrect.", call. = FALSE)
     nodes[, rank := 1]
   } else {
-    ranks <- igraph::topo_sort(graph, mode = "out") |> names() |> (\(x) stats::setNames(seq_along(x), x))()
+    ranks <- igraph::topo_sort(graph, mode = "out") |>
+      names() |>
+      (\(x) stats::setNames(seq_along(x), x))()
     nodes[, rank := ranks[id]]
   }
 
@@ -390,7 +392,7 @@ layout.lavaan_graph <- function(object, ...) {
   setorder(main_nodes, rank, barycenter)
 
   # Assign evenly spaced positions to the main nodes (clusters)
-  main_nodes[, (secondary_axis) := seq(-.N/2 + 0.5, .N/2 - 0.5, by = 1) * 2, by = rank]
+  main_nodes[, (secondary_axis) := seq(-.N / 2 + 0.5, .N / 2 - 0.5, by = 1) * 2, by = rank]
 
   # Merge the calculated secondary positions back into the main layout table
   layout_dt[main_nodes, on = "id", (secondary_axis) := mget(paste0("i.", secondary_axis))]

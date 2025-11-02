@@ -171,7 +171,7 @@ NODE_STYLES <- list(
 EDGE_STYLES <- list(
   regression = list(minlen = 3), # style = "solid", arrowhead = "normal", penwidth = 1.5,
   loading = list(minlen = 3), # style = "solid", arrowhead = "normal", penwidth = 1.5,
-  moderation = list(dir = "back", arrowtail = "normal"), # style = "solid", penwidth = 1.5
+  moderation = list(arrowhead = "normal"), # style = "solid", penwidth = 1.5
   moderated_path_segment_1 = list(arrowhead = "none"), # style = "solid", penwidth = 1.5
   moderated_path_segment_2 = list(minlen = 1), # style = "solid", arrowhead = "normal", penwidth = 1.5
   covariance = list(style = "dotted", arrowhead = "none", constraint = "false", fontsize = 8), # , penwidth = 1.5,
@@ -256,14 +256,14 @@ NODE_EXTRACTION_RULES <- list(
   ),
   list(
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & variable %like% ":"),
-    id_expr = quote(variable),
+    id_expr = quote(.sanitize_string(variable)),
     unit_expr = quote(variable),
     node_type = NODE_TYPES$MODERATOR,
     id_suffix = NULL
   ),
   list(
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & variable %like% ":"),
-    id_expr = quote(variable),
+    id_expr = quote(.sanitize_string(variable)),
     unit_expr = quote(variable),
     node_type = NODE_TYPES$ANCHOR_PATH,
     id_suffix = "path"
@@ -332,6 +332,7 @@ EDGE_EXTRACTION_RULES <- list(
     id_prefix = "int"
   ),
   list(
+    # MODERATION segment 1: from first predictor to anchor
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & rhs %like% ":"),
     from_expr = quote(strsplit(rhs, ":")[[1]][1]),
     to_expr = quote(paste0(.sanitize_string(rhs), "_path")),
@@ -339,6 +340,7 @@ EDGE_EXTRACTION_RULES <- list(
     id_prefix = "mod"
   ),
   list(
+    # MODERATION segment 2: from anchor to outcome
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & rhs %like% ":"),
     from_expr = quote(paste0(.sanitize_string(rhs), "_path")),
     to_expr = quote(lhs),
@@ -346,9 +348,10 @@ EDGE_EXTRACTION_RULES <- list(
     id_prefix = "mod"
   ),
   list(
+    # MODERATION arrow: from anchor to moderator node
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & rhs %like% ":"),
     from_expr = quote(paste0(.sanitize_string(rhs), "_path")),
-    to_expr = quote(rhs),
+    to_expr = quote(.sanitize_string(rhs)),
     edge_type = EDGE_TYPES$MODERATION,
     id_prefix = "mod"
   )

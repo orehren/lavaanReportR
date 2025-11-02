@@ -295,17 +295,27 @@
   # --- 4. Smart Satellite Node Placement ---
 
   # 4a. Determine placement strategy for each main node unit.
-  #     - "look_ahead": For nodes with children, place satellites opposite the children.
-  #     - "flow_direction": For outcome-only nodes, place satellites along the graph flow.
-  #     - "default": For isolated nodes, use the original above/below placement.
   main_node_ids <- layout_dt[node_type %in% c("manifest", "latent", "moderator"), id]
+
+  # For the "flow_direction" rule, the offset must be negative for TB layouts
+  # because the y-coordinates decrease from top to bottom.
+  flow_dir_multiplier <- if (flow_direction == "TB") -1 else 1
 
   placement_guides <- layout_dt[id %in% main_node_ids, {
 
     current_node_id <- .BY$id
+    current_node_type <- layout_dt[id == current_node_id, node_type]
 
     children <- directed_paths[from == current_node_id, to]
     parents <- directed_paths[to == current_node_id, from]
+
+    # SPECIAL CASE for Moderators: For layout, their "child" is their
+    # anchor path, which is their parent in the directed graph. We re-assign
+    # it here so the "look_ahead" logic is applied correctly.
+    if (current_node_type == "moderator") {
+      children <- parents
+      parents <- character(0)
+    }
 
     if (length(children) > 0) {
       # Rule 1: "look_ahead"
@@ -315,22 +325,20 @@
       avg_child_pos <- mean(child_coords[[secondary_axis]], na.rm = TRUE)
       main_node_pos <- main_node_coord[[secondary_axis]]
 
-      # Direction is -1 for "below/left", 1 for "above/right" on the secondary axis
       direction <- ifelse(avg_child_pos > main_node_pos, -1, 1)
       list(placement_type = "offset_secondary", direction = direction)
 
     } else if (length(parents) > 0) {
       # Rule 2: "flow_direction"
-      list(placement_type = "offset_primary", direction = 1)
+      list(placement_type = "offset_primary", direction = flow_dir_multiplier)
 
     } else {
-      # Rule 3: "default" for isolated nodes
+      # Rule 3: "default"
       list(placement_type = "default", direction = 1)
     }
   }, by = id]
 
   # 4b. Apply the calculated placement logic.
-  # We loop through each unit that has satellites, as it's the clearest approach.
   units_to_place <- unique(layout_dt[node_type %in% c("variance", "intercept"), node_unit])
 
   offset_dist <- 0.5
@@ -338,40 +346,31 @@
 
   for (unit in units_to_place) {
 
-    guide <- placement_guides[id == unit]
-    # If a unit somehow has no guide (e.g., a variance for a non-main node), skip it.
+    main_node_id <- .sanitize_string(unit)
+    guide <- placement_guides[id == main_node_id]
     if (nrow(guide) == 0) next
 
-    main_node <- layout_dt[id == unit]
+    main_node <- layout_dt[id == main_node_id]
     var_idx <- which(layout_dt$node_unit == unit & layout_dt$node_type == "variance")
     int_idx <- which(layout_dt$node_unit == unit & layout_dt$node_type == "intercept")
 
     if (guide$placement_type == "offset_secondary") {
-      # Offset on secondary axis, spread on primary axis
       new_secondary_pos <- main_node[[secondary_axis]] + (guide$direction * offset_dist)
-
       set(layout_dt, var_idx, j = secondary_axis, value = new_secondary_pos)
       set(layout_dt, int_idx, j = secondary_axis, value = new_secondary_pos)
-
       set(layout_dt, var_idx, j = primary_axis, value = main_node[[primary_axis]] - side_by_side_dist)
       set(layout_dt, int_idx, j = primary_axis, value = main_node[[primary_axis]] + side_by_side_dist)
 
     } else if (guide$placement_type == "offset_primary") {
-      # Offset on primary axis, spread on secondary axis
       new_primary_pos <- main_node[[primary_axis]] + (guide$direction * offset_dist)
-
       set(layout_dt, var_idx, j = primary_axis, value = new_primary_pos)
       set(layout_dt, int_idx, j = primary_axis, value = new_primary_pos)
-
       set(layout_dt, var_idx, j = secondary_axis, value = main_node[[secondary_axis]] - side_by_side_dist)
       set(layout_dt, int_idx, j = secondary_axis, value = main_node[[secondary_axis]] + side_by_side_dist)
 
     } else { # "default"
-      # Place satellites on opposite sides of the secondary axis, with a spread
-      # on the primary axis to avoid a purely linear look.
       set(layout_dt, var_idx, j = secondary_axis, value = main_node[[secondary_axis]] + offset_dist)
       set(layout_dt, int_idx, j = secondary_axis, value = main_node[[secondary_axis]] - offset_dist)
-
       set(layout_dt, var_idx, j = primary_axis, value = main_node[[primary_axis]] - side_by_side_dist)
       set(layout_dt, int_idx, j = primary_axis, value = main_node[[primary_axis]] + side_by_side_dist)
     }

@@ -271,7 +271,7 @@
   # 3b. Cluster Sizing and Positioning
   # Calculate how many satellites each main node has
   layout_dt[node_type %in% c("variance", "intercept"), satellite_count := .N, by = node_unit]
-  main_nodes <- layout_dt[node_type == "manifest" | node_type == "latent"]
+  main_nodes <- layout_dt[node_type %in% c("manifest", "latent", "moderator")]
   setorder(main_nodes, rank, barycenter)
 
   # Assign evenly spaced positions to the main nodes (clusters)

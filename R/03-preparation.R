@@ -72,6 +72,10 @@
     use.names = TRUE, fill = TRUE
   )
 
+  # --- 2. Generate Final Edge ID (NEU) ---
+  # Erzeuge die eindeutige ID aus den Metadaten. Dies gehört in die prepare-Phase.
+  prepared_data[, id := paste(id_prefix, from, "to", to, sep = "_")]
+
   # --- 3. Filtering ---
   render_map_edges <- list(
     variances = EDGE_TYPES$VARIANCE,

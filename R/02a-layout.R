@@ -271,7 +271,7 @@
   # 3b. Cluster Sizing and Positioning
   # Calculate how many satellites each main node has
   layout_dt[node_type %in% c("variance", "intercept"), satellite_count := .N, by = node_unit]
-  main_nodes <- layout_dt[node_type == "manifest" | node_type == "latent"]
+  main_nodes <- layout_dt[node_type == "manifest" | node_type == "latent" | node_type == "moderator"]
   setorder(main_nodes, rank, barycenter)
 
   # Assign evenly spaced positions to the main nodes (clusters)
@@ -288,6 +288,27 @@
   offset <- 0.5
   layout_dt[node_type == "variance", (secondary_axis) := .SD[[1]] + offset, .SDcols = secondary_axis]
   layout_dt[node_type == "intercept", (secondary_axis) := .SD[[1]] - offset, .SDcols = secondary_axis]
+
+  # --- 5. Anchor Path Node Placement ---
+  anchor_paths <- layout_dt[node_type == "anchor_path"]
+  if (nrow(anchor_paths) > 0) {
+    # Find the two nodes connected by each anchor path
+    # Segment 1: from -> anchor
+    # Segment 2: anchor -> to
+    seg1 <- edges[to %in% anchor_paths$id & edge_type == "moderated_path_segment_1", .(anchor_id = to, connected_node = from)]
+    seg2 <- edges[from %in% anchor_paths$id & edge_type == "moderated_path_segment_2", .(anchor_id = from, connected_node = to)]
+
+    connected_nodes <- rbind(seg1, seg2)
+
+    # Get the coordinates of the connected nodes
+    connected_nodes[layout_dt, on = .(connected_node = id), `:=`(x = i.x, y = i.y)]
+
+    # Calculate the midpoint for each anchor
+    midpoints <- connected_nodes[, .(x = mean(x), y = mean(y)), by = anchor_id]
+
+    # Update the layout table with the anchor coordinates
+    layout_dt[midpoints, on = .(id = anchor_id), `:=`(x = i.x, y = i.y)]
+  }
 
   return(layout_dt[, .(id, x, y)])
 }

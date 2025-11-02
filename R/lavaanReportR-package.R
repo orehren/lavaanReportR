@@ -11,6 +11,7 @@
 #' @importFrom data.table melt
 #' @importFrom data.table rbindlist
 #' @importFrom data.table setnames
+#' @importFrom data.table setorder
 #' @importFrom data.table uniqueN
 #' @importFrom purrr compact map detect reduce map_dfr
 ## usethis namespace: end

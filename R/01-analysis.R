@@ -476,6 +476,7 @@
     substr(edge_type, 1, 3),
     .sanitize_string(label),
     .sanitize_string(from),
+    "to",
     .sanitize_string(to),
     sep = "_"
   )]
@@ -515,6 +516,10 @@
     rhs %like% "\\*", SEMANTIC_TYPES$INDIRECT,
     default = SEMANTIC_TYPES$DIRECT
   )]
+
+  if (anyNA(defined_params$edge_type)) {
+    stop("Error: 'edge_type' column contains NA values after fcase evaluation.")
+  }
 
   # Create a lookup table for all direct, labeled paths in the model.
   direct_paths <- param_table[

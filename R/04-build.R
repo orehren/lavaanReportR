@@ -97,7 +97,7 @@
   # 1. Definiere die Edge-spezifische Konfiguration.
   by_vars <- c("from", "to", "edge_type")
   meta_cols <- c(
-    "id_prefix", "edge_type", "group", "level", "sig",
+    "id_prefix", "edge_type", "group", "level", "sig", "rhs",
     "est.std", "est.unstd", "mediators", "base_paths"
   )
 

@@ -280,6 +280,15 @@
   # Merge the calculated secondary positions back into the main layout table
   layout_dt[main_nodes, on = "id", (secondary_axis) := mget(paste0("i.", secondary_axis))]
 
+  # CRITICAL: Sort by unit and a custom factor to ensure the main node
+  # (which has the coordinate) is first in each group before filling down.
+  layout_dt[, sort_order := fcase(
+    node_type %in% c("manifest", "latent", "moderator"), 1,
+    default = 2
+  )]
+  setorder(layout_dt, node_unit, sort_order)
+  layout_dt[, sort_order := NULL]
+
   # Fill down the secondary coordinate for satellite nodes from their main node
   layout_dt[, (secondary_axis) := zoo::na.locf(.SD[[1]], na.rm = FALSE), by = node_unit, .SDcols = secondary_axis]
 

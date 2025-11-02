@@ -42,25 +42,72 @@ test_that("Grid-based layout algorithm calculates coordinates correctly", {
   section_size <- 3
 
   # 3. Assertions for Primary Axis (x-coordinates for LR flow)
-  # Check that each rank is in the correct section
-  expect_equal(unique(layout_dt[rank == 1, x]), (1 - median_rank) * section_size) # -4.5
-  expect_equal(unique(layout_dt[rank == 2, x]), (2 - median_rank) * section_size) # -1.5
-  expect_equal(unique(layout_dt[rank == 3, x]), (3 - median_rank) * section_size) #  1.5
-  expect_equal(unique(layout_dt[rank == 4, x]), (4 - median_rank) * section_size) #  4.5
+  # The new logic gives satellites a slight primary-axis offset.
+  # Therefore, we only test the main nodes for rank centering.
+  main_nodes_layout <- layout_dt[id %in% c("y1", "y2", "y3", "y4", "y5")]
+  expect_equal(unique(main_nodes_layout[rank == 1, x]), (1 - median_rank) * section_size) # -4.5
+  expect_equal(unique(main_nodes_layout[rank == 2, x]), (2 - median_rank) * section_size) # -1.5
+  expect_equal(unique(main_nodes_layout[rank == 3, x]), (3 - median_rank) * section_size) #  1.5
+  expect_equal(unique(main_nodes_layout[rank == 4, x]), (4 - median_rank) * section_size) #  4.5
 
-  # 4. Assertions for Satellite Node Placement
-  # Check that satellites are correctly offset from their main nodes
-  y1_pos <- layout_dt[id == "y1", y]
-  y1_var_pos <- layout_dt[id == "y1_var", y]
-  y1_int_pos <- layout_dt[id == "y1_int", y]
+  # 4. Assertions for New "Look-Ahead" Satellite Placement
 
-  expect_equal(y1_var_pos, y1_pos + 0.5)
-  expect_equal(y1_int_pos, y1_pos - 0.5)
+  # Case 1: y1 is a predictor. Its child is y2.
+  # Satellites should be placed on the opposite side of y2.
+  y1_coords <- layout_dt[id == "y1"]
+  y2_coords <- layout_dt[id == "y2"]
+  y1_var_coords <- layout_dt[id == "y1_var"]
+  y1_int_coords <- layout_dt[id == "y1_int"]
 
-  y2_pos <- layout_dt[id == "y2", y]
-  y2_var_pos <- layout_dt[id == "y2_var", y]
-  y2_int_pos <- layout_dt[id == "y2_int", y]
+  # The test should not assume the relative position of y1 and y2, which
+  # depends on the barycenter sort. Instead, it must test that the satellites
+  # are placed on the correct *opposite* side, whichever that may be.
+  if (y2_coords$y > y1_coords$y) {
+    # y2 is above y1, so satellites should be below.
+    expect_equal(y1_var_coords$y, y1_coords$y - 0.5)
+    expect_equal(y1_int_coords$y, y1_coords$y - 0.5)
+  } else {
+    # y2 is below y1, so satellites should be above.
+    expect_equal(y1_var_coords$y, y1_coords$y + 0.5)
+    expect_equal(y1_int_coords$y, y1_coords$y + 0.5)
+  }
 
-  expect_equal(y2_var_pos, y2_pos + 0.5)
-  expect_equal(y2_int_pos, y2_pos - 0.5)
+  # We can always expect the side-by-side placement on the x-axis.
+  expect_equal(y1_var_coords$x, y1_coords$x - 0.25)
+  expect_equal(y1_int_coords$x, y1_coords$x + 0.25)
+
+  # Case 2: y5 is an outcome-only node.
+  # Satellites should be placed in the direction of graph flow (to the right).
+  y5_coords <- layout_dt[id == "y5"]
+  y5_var_coords <- layout_dt[id == "y5_var"]
+  y5_int_coords <- layout_dt[id == "y5_int"]
+
+  expect_equal(y5_var_coords$x, y5_coords$x + 0.5)
+  expect_equal(y5_int_coords$x, y5_coords$x + 0.5)
+  # Check side-by-side placement on the y-axis
+  expect_equal(y5_var_coords$y, y5_coords$y - 0.25)
+  expect_equal(y5_int_coords$y, y5_coords$y + 0.25)
+
+  # Case 3: An isolated node (y_iso)
+  # This requires a separate model run.
+  iso_model <- ' y_iso ~~ y_iso '
+  iso_ptable <- lavaan::sem(iso_model, data = data.frame(y_iso = rnorm(100)), meanstructure = TRUE) |>
+    extract_model_estimates_data()
+
+  iso_layout_dt <- iso_ptable |>
+    analyze() |>
+    configure_plot() |>
+    layout() |>
+    getElement("layout")
+
+  y_iso_coords <- iso_layout_dt[id == "y_iso"]
+  y_iso_var_coords <- iso_layout_dt[id == "y_iso_var"]
+  y_iso_int_coords <- iso_layout_dt[id == "y_iso_int"]
+
+  # Satellites should be placed on opposite sides of the secondary axis (y).
+  expect_equal(y_iso_var_coords$y, y_iso_coords$y + 0.5)
+  expect_equal(y_iso_int_coords$y, y_iso_coords$y - 0.5)
+  # And they should have a side-by-side spread on the primary axis (x).
+  expect_equal(y_iso_var_coords$x, y_iso_coords$x - 0.25)
+  expect_equal(y_iso_int_coords$x, y_iso_coords$x + 0.25)
 })

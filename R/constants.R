@@ -224,6 +224,16 @@ NODE_EXTRACTION_RULES <- list(
     id_suffix = NULL
   ),
   list(
+    # This is a broad rule to ensure that any variable with a variance
+    # gets a main node. It runs after the LATENT rule, and the final de-duplication
+    # ensures that latent variables are not overwritten.
+    filter_expr = quote(op == MODEL_OPS$VARIANCES),
+    id_expr = quote(variable),
+    unit_expr = quote(variable),
+    node_type = NODE_TYPES$MANIFEST,
+    id_suffix = NULL
+  ),
+  list(
     filter_expr = quote(op == MODEL_OPS$REGRESSIONS & !variable %like% ":"),
     id_expr = quote(variable),
     unit_expr = quote(variable),

@@ -408,6 +408,7 @@
 #' @param x An object of class \code{lavaan_plot_config}.
 #' @param ... Additional arguments (not used).
 #' @return A \code{lavaan_layout} object containing the calculated layout information.
+#' @importFrom data.table set
 #' @exportS3Method lavaanReportR::layout
 layout.lavaan_plot_config <- function(x, ...) {
   config <- x

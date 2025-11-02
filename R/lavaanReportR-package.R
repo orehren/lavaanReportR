@@ -4,6 +4,7 @@
 ## usethis namespace: start
 #' @importFrom data.table %like%
 #' @importFrom data.table :=
+#' @importFrom data.table copy
 #' @importFrom data.table .I
 #' @importFrom data.table .N
 #' @importFrom data.table .SD

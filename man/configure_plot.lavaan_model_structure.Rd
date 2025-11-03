@@ -16,6 +16,7 @@
   text_size_nodes = NULL,
   text_size_edges = NULL,
   text_size_details = NULL,
+  manual_ranks = NULL,
   show_legend = NULL,
   show_legend_with_effects = NULL,
   multilevel_multigroup_order = NULL,

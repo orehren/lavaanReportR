@@ -168,52 +168,66 @@
 #' @return A named list containing the final layout data (`$levels`).
 #' @keywords internal
 #' @noRd
+.get_tvc_model_type <- function(element_groups) {
+  has_predictors <- "predictors" %in% names(element_groups) && length(element_groups$predictors) > 0
+  has_tvcs <- "tv_covariates" %in% names(element_groups) && length(element_groups$tv_covariates) > 0
+
+  if (has_predictors && has_tvcs) {
+    return("lgm_with_tvc")
+  } else {
+    return("default")
+  }
+}
+
+.apply_lgm_tvc_ranking_rules <- function(element_groups, all_node_ids) {
+  # Initialize all nodes to rank 0 (or any other default)
+  ranks <- stats::setNames(rep(0, length(all_node_ids)), all_node_ids)
+
+  # Apply the specific 4-level ranking for LGM with TVCs
+  ranks[element_groups$predictors] <- 1
+  ranks[element_groups$growth_factors] <- 2
+
+  # Ensure 'measurement_occasions' exists before accessing
+  if ("measurement_occasions" %in% names(element_groups)) {
+    ranks[element_groups$measurement_occasions] <- 3
+  }
+
+  ranks[element_groups$tv_covariates] <- 4
+
+  return(ranks)
+}
+
 .analyze_layout_structure <- function(nodes, edges, element_groups, manual_ranks = NULL) {
-  # --- 1. & 2. Initial Rank Calculation (bleibt unverändert) ---
   all_node_ids <- nodes$id
-  directed_paths <- .collect_all_directed_paths(edges)
+  model_type <- .get_tvc_model_type(element_groups)
 
-  # CRITICAL FIX: Ensure all nodes are passed to the graph constructor.
-  # This includes nodes that may only be connected by non-directed paths
-  # (e.g., covariances) or are isolates, ensuring they are part of the
-  # layout process.
-  unique_node_ids <- unique(all_node_ids)
+  # --- 1. Calculate Initial Ranks ---
+  # Use the special LGM ranking if applicable, otherwise use the default
+  # topological sort for all other models.
+  if (model_type == "lgm_with_tvc") {
+    initial_ranks <- .apply_lgm_tvc_ranking_rules(element_groups, all_node_ids)
+  } else {
+    directed_paths <- .collect_all_directed_paths(edges)
+    graph <- igraph::graph_from_data_frame(directed_paths, directed = TRUE, vertices = all_node_ids)
 
-  graph <- igraph::graph_from_data_frame(directed_paths, directed = TRUE, vertices = unique_node_ids)
-
-  if (!igraph::is_dag(graph)) {
-    warning("A cycle was detected...", call. = FALSE)
-    return(list(levels = list(`1` = unique_node_ids), element_unit_map = data.table()))
-  }
-
-  sorted_nodes <- names(igraph::topo_sort(graph, mode = "out"))
-  node_levels <- stats::setNames(rep(1, length(unique_node_ids)), unique_node_ids)
-
-  for (node in rev(sorted_nodes)) {
-    successors <- names(igraph::neighbors(graph, node, mode = "out"))
-    if (length(successors) > 0) {
-      node_levels[node] <- 1 + max(node_levels[successors])
+    if (!igraph::is_dag(graph)) {
+      warning("A cycle was detected...", call. = FALSE)
+      return(list(levels = list(`1` = all_node_ids), element_unit_map = data.table()))
     }
-  }
-  initial_ranks <- max(node_levels) - node_levels + 1
 
-  # --- 3a. Automated LGM Covariate Rank Correction ---
-  is_lgm_with_tvc <- "predictors" %in% names(element_groups) && "tv_covariates" %in% names(element_groups)
-  if (is_lgm_with_tvc) {
-    predictor_nodes <- element_groups[["predictors"]]
-    tv_covariate_nodes <- element_groups[["tv_covariates"]]
+    sorted_nodes <- names(igraph::topo_sort(graph, mode = "out"))
+    node_levels <- stats::setNames(rep(1, length(all_node_ids)), all_node_ids)
 
-    # Check if there are any nodes in both groups to act on
-    if (length(predictor_nodes) > 0 && length(tv_covariate_nodes) > 0) {
-      # Determine the target rank from the first predictor node
-      target_rank <- initial_ranks[predictor_nodes[1]]
-
-      # Enforce this rank on all time-varying covariates
-      initial_ranks[tv_covariate_nodes] <- target_rank
+    for (node in rev(sorted_nodes)) {
+      successors <- names(igraph::neighbors(graph, node, mode = "out"))
+      if (length(successors) > 0) {
+        node_levels[node] <- 1 + max(node_levels[successors])
+      }
     }
+    initial_ranks <- max(node_levels) - node_levels + 1
   }
 
-  # --- 3. Apply Manual Rank Overrides ---
+  # --- 2. Apply Manual Rank Overrides ---
   if (!is.null(manual_ranks)) {
     for (group_name in names(manual_ranks)) {
       if (group_name %in% names(element_groups)) {
@@ -223,21 +237,29 @@
     }
   }
 
-  # --- 3b. Propagate Rank Changes ---
-  # After a manual override, the ranks of downstream nodes may need to be
-  # adjusted to maintain the topological order (parents must have a lower
-  # rank number than their children).
-  propagated_ranks <- initial_ranks
-  for (node in sorted_nodes) {
-    parents <- names(igraph::neighbors(graph, node, mode = "in"))
-    if (length(parents) > 0) {
-      max_parent_rank <- max(propagated_ranks[parents])
-      if (propagated_ranks[node] <= max_parent_rank) {
-        propagated_ranks[node] <- max_parent_rank + 1
+  # --- 3. Propagate Rank Changes (Conditional) ---
+  # This aggressive propagation is only needed for the topological sort.
+  # For the LGM special case, we trust the user's manual override completely.
+  if (model_type != "lgm_with_tvc") {
+    propagated_ranks <- initial_ranks
+    # Re-create graph and sorted_nodes if they don't exist in this scope
+    if (!exists("graph", inherits = FALSE)) {
+      directed_paths <- .collect_all_directed_paths(edges)
+      graph <- igraph::graph_from_data_frame(directed_paths, directed = TRUE, vertices = all_node_ids)
+      sorted_nodes <- names(igraph::topo_sort(graph, mode = "out"))
+    }
+
+    for (node in sorted_nodes) {
+      parents <- names(igraph::neighbors(graph, node, mode = "in"))
+      if (length(parents) > 0) {
+        max_parent_rank <- max(propagated_ranks[parents])
+        if (propagated_ranks[node] <= max_parent_rank) {
+          propagated_ranks[node] <- max_parent_rank + 1
+        }
       }
     }
+    initial_ranks <- propagated_ranks
   }
-  initial_ranks <- propagated_ranks
 
   # --- 4. Consolidate Ranks by Semantic Node Unit (Radically Simplified) ---
 

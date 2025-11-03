@@ -42,71 +42,78 @@ FIXTURE_ANALYZED_LGM_TVC <- analyze(FIXTURE_PTABLE_LGM_TVC)
 # LGM LAYOUT TESTS
 # ==============================================================================
 
-test_that("Automated LGM layout correctly ranks all covariates together", {
-  # --- 1. Default Layout ---
-  config_default <- configure_plot(FIXTURE_ANALYZED_LGM_TVC)
-  layout_default_obj <- layout(config_default)
+test_that("Automated LGM layout produces the correct 4-level hierarchy", {
+  # --- 1. Setup ---
+  config <- configure_plot(FIXTURE_ANALYZED_LGM_TVC)
+  layout_obj <- layout(config)
 
-  # Extract the rank data into a convenient format
-  ranks_default <- .analyze_layout_structure(
-    layout_default_obj$config$analyzed_model$nodes,
-    layout_default_obj$config$analyzed_model$edges,
-    layout_default_obj$config$analyzed_model$features$element_groups
+  ranks <- .analyze_layout_structure(
+    layout_obj$config$analyzed_model$nodes,
+    layout_obj$config$analyzed_model$edges,
+    layout_obj$config$analyzed_model$features$element_groups
   )$levels
 
-  rank_dt_default <- data.table(
-    id = unlist(ranks_default, use.names = FALSE),
-    rank = as.numeric(rep(names(ranks_default), lengths(ranks_default)))
+  rank_dt <- data.table(
+    id = unlist(ranks, use.names = FALSE),
+    rank = as.numeric(rep(names(ranks), lengths(ranks)))
   )
 
-  # --- 2. Verification ---
-  # All time-varying and time-invariant covariates should now be in the same, single rank.
-  rank_of_x9 <- rank_dt_default[id == "x9", rank]
+  # Helper to check if all nodes of a group are in a specific rank
+  expect_nodes_in_rank <- function(node_ids, target_rank) {
+    for (node_id in node_ids) {
+      expect_equal(rank_dt[id == node_id, rank], target_rank,
+                   info = paste("Node", node_id, "failed rank check."))
+    }
+  }
 
-  expect_equal(rank_dt_default[id == "x5", rank], rank_of_x9)
-  expect_equal(rank_dt_default[id == "x6", rank], rank_of_x9)
-  expect_equal(rank_dt_default[id == "x7", rank], rank_of_x9)
-  expect_equal(rank_dt_default[id == "x8", rank], rank_of_x9)
+  # --- 2. Verification ---
+  element_groups <- FIXTURE_ANALYZED_LGM_TVC$features$element_groups
+
+  expect_nodes_in_rank(element_groups$predictors, 1)
+  expect_nodes_in_rank(element_groups$growth_factors, 2)
+  expect_nodes_in_rank(element_groups$measurement_occasions, 3)
+  expect_nodes_in_rank(element_groups$tv_covariates, 4)
 })
 
-test_that("Manual rank override still works correctly on LGM layouts", {
-  # --- 1. Manual Rank Override Layout ---
-  # We will force the tv_covariates to a completely different rank
-  manual_override_rank <- 4
-
-  config_manual <- configure_plot(
-    FIXTURE_ANALYZED_LGM_TVC,
-    manual_ranks = list(tv_covariates = manual_override_rank)
+test_that("Manual rank override still works on the automated LGM layout", {
+  # --- 1. Setup ---
+  # Swap the ranks of predictors and TVCs
+  manual_ranks_override <- list(
+    predictors = 4,
+    tv_covariates = 1
   )
 
-  layout_manual_obj <- layout(config_manual)
+  config <- configure_plot(FIXTURE_ANALYZED_LGM_TVC, manual_ranks = manual_ranks_override)
+  layout_obj <- layout(config)
 
-  ranks_manual <- .analyze_layout_structure(
-    layout_manual_obj$config$analyzed_model$nodes,
-    layout_manual_obj$config$analyzed_model$edges,
-    layout_manual_obj$config$analyzed_model$features$element_groups,
-    manual_ranks = list(tv_covariates = manual_override_rank)
+  ranks <- .analyze_layout_structure(
+    layout_obj$config$analyzed_model$nodes,
+    layout_obj$config$analyzed_model$edges,
+    layout_obj$config$analyzed_model$features$element_groups,
+    manual_ranks = manual_ranks_override
   )$levels
 
-  rank_dt_manual <- data.table(
-    id = unlist(ranks_manual, use.names = FALSE),
-    rank = as.numeric(rep(names(ranks_manual), lengths(ranks_manual)))
+  rank_dt <- data.table(
+    id = unlist(ranks, use.names = FALSE),
+    rank = as.numeric(rep(names(ranks), lengths(ranks)))
   )
 
+  # Helper function
+  expect_nodes_in_rank <- function(node_ids, target_rank) {
+    for (node_id in node_ids) {
+      expect_equal(rank_dt[id == node_id, rank], target_rank,
+                   info = paste("Node", node_id, "failed rank check."))
+    }
+  }
+
   # --- 2. Verification ---
-  # All tv_covariates should be in the manually specified rank.
-  expect_equal(rank_dt_manual[id == "x5", rank], manual_override_rank)
-  expect_equal(rank_dt_manual[id == "x6", rank], manual_override_rank)
-  expect_equal(rank_dt_manual[id == "x7", rank], manual_override_rank)
-  expect_equal(rank_dt_manual[id == "x8", rank], manual_override_rank)
+  element_groups <- FIXTURE_ANALYZED_LGM_TVC$features$element_groups
 
-  # The rank of the time-invariant covariate should NOT have changed.
-  # We get its original rank from the default layout test.
-  config_default <- configure_plot(FIXTURE_ANALYZED_LGM_TVC)
-  layout_default_obj <- layout(config_default)
-  ranks_default <- .analyze_layout_structure(layout_default_obj$config$analyzed_model$nodes, layout_default_obj$config$analyzed_model$edges, layout_default_obj$config$analyzed_model$features$element_groups)$levels
-  rank_dt_default <- data.table(id = unlist(ranks_default, use.names = FALSE), rank = as.numeric(rep(names(ranks_default), lengths(ranks_default))))
-  original_x9_rank <- rank_dt_default[id == "x9", rank]
+  # Check the overridden ranks
+  expect_nodes_in_rank(element_groups$predictors, 4)
+  expect_nodes_in_rank(element_groups$tv_covariates, 1)
 
-  expect_equal(rank_dt_manual[id == "x9", rank], original_x9_rank)
+  # Check that the other ranks are untouched
+  expect_nodes_in_rank(element_groups$growth_factors, 2)
+  expect_nodes_in_rank(element_groups$measurement_occasions, 3)
 })

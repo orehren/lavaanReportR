@@ -28,27 +28,24 @@ analyze.lavaan_parameter_table <- function(x, ...) {
 
   # --- 1. Analyze the individual components of the model ---
 
-  # Analyze the overall model features (determines model type, LGM status, etc.)
-  features <- .analyze_model_features(param_table)
-
   # Analyze and extract all potential nodes
   nodes <- .analyze_node_structure(param_table)
 
   # Analyze and extract all potential edges
-  edges <- .analyze_edge_structure(param_table)
+  all_edges <- .analyze_edge_structure(param_table)
 
   # Analyze and extract the topology of all defined paths
   defined_paths <- .analyze_defined_paths_structure(param_table)
 
-  # Analyze the hierarchical layout BASED ON the extracted nodes and edges
-  # layout <- .analyze_layout_structure(nodes, edges)
+  # Now that nodes and edges are available, analyze the overall model features
+  features <- .analyze_model_features(param_table, nodes = nodes, all_edges = all_edges)
 
   # --- 2. Assemble the final analysis object ---
   .new_lavaan_model_structure(
     param_table = param_table,
     features = features,
     nodes = nodes,
-    edges = edges,
+    edges = all_edges,
     defined_paths = defined_paths
     # layout = layout
   )
@@ -112,6 +109,7 @@ configure_plot.lavaan_model_structure <- function(x,
                                                   text_size_nodes = NULL,
                                                   text_size_edges = NULL,
                                                   text_size_details = NULL,
+                                                  manual_ranks = NULL,
                                                   show_legend = NULL,
                                                   show_legend_with_effects = NULL,
                                                   multilevel_multigroup_order = NULL,

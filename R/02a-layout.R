@@ -168,7 +168,7 @@
 #' @return A named list containing the final layout data (`$levels`).
 #' @keywords internal
 #' @noRd
-.analyze_layout_structure <- function(nodes, edges) {
+.analyze_layout_structure <- function(nodes, edges, element_groups, manual_ranks = NULL) {
   # --- 1. & 2. Initial Rank Calculation (bleibt unverändert) ---
   all_node_ids <- nodes$id
   directed_paths <- .collect_all_directed_paths(edges)
@@ -197,9 +197,35 @@
   }
   initial_ranks <- max(node_levels) - node_levels + 1
 
-  # --- 3. Consolidate Ranks by Semantic Node Unit (Radically Simplified) ---
+  # --- 3. Apply Manual Rank Overrides ---
+  if (!is.null(manual_ranks)) {
+    for (group_name in names(manual_ranks)) {
+      if (group_name %in% names(element_groups)) {
+        nodes_in_group <- element_groups[[group_name]]
+        initial_ranks[nodes_in_group] <- manual_ranks[[group_name]]
+      }
+    }
+  }
 
-  # 3a. Create a map of each node to its initial rank and its unit.
+  # --- 3b. Propagate Rank Changes ---
+  # After a manual override, the ranks of downstream nodes may need to be
+  # adjusted to maintain the topological order (parents must have a lower
+  # rank number than their children).
+  propagated_ranks <- initial_ranks
+  for (node in sorted_nodes) {
+    parents <- names(igraph::neighbors(graph, node, mode = "in"))
+    if (length(parents) > 0) {
+      max_parent_rank <- max(propagated_ranks[parents])
+      if (propagated_ranks[node] <= max_parent_rank) {
+        propagated_ranks[node] <- max_parent_rank + 1
+      }
+    }
+  }
+  initial_ranks <- propagated_ranks
+
+  # --- 4. Consolidate Ranks by Semantic Node Unit (Radically Simplified) ---
+
+  # 4a. Create a map of each node to its initial rank and its unit.
   node_rank_map <- data.table(id = names(initial_ranks), initial_rank = initial_ranks)
   node_rank_map[nodes, on = "id", node_unit := i.node_unit]
 
@@ -223,9 +249,9 @@
   return(list(levels = final_levels, element_unit_map = data.table()))
 }
 
-.calculate_xy_layout <- function(nodes, edges, flow_direction = "LR") {
+.calculate_xy_layout <- function(nodes, edges, element_groups, manual_ranks = NULL, flow_direction = "LR") {
   # --- 1. Initial Setup ---
-  ranks <- .analyze_layout_structure(nodes, edges)
+  ranks <- .analyze_layout_structure(nodes, edges, element_groups, manual_ranks)
 
   layout_dt <- data.table(
     id = unlist(ranks$levels, use.names = FALSE),
@@ -418,6 +444,8 @@ layout.lavaan_plot_config <- function(x, ...) {
   layout <- .calculate_xy_layout(
     nodes = analyzed_model$nodes,
     edges = analyzed_model$edges,
+    element_groups = analyzed_model$features$element_groups,
+    manual_ranks = config$recipe$manual_ranks,
     flow_direction = config$recipe$rankdir
   )
 

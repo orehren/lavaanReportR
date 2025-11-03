@@ -15,7 +15,18 @@
 #'   `$lgm_analysis` result if applicable.
 #' @keywords internal
 #' @noRd
-.analyze_model_features <- function(param_table) {
+.get_default_element_groups <- function(nodes, all_edges) {
+  if (nrow(all_edges) == 0) {
+    return(list(predictors = character(), mediators = character(), outcomes = character()))
+  }
+  list(
+    predictors = nodes[node_type == "manifest" & id %in% all_edges[edge_type == "regression", from], id],
+    mediators = nodes[node_type == "manifest" & id %in% all_edges[edge_type == "regression", from] & id %in% all_edges[edge_type == "regression", to], id],
+    outcomes = nodes[node_type == "manifest" & id %in% all_edges[edge_type == "regression", to] & !id %in% all_edges[edge_type == "regression", from], id]
+  )
+}
+
+.analyze_model_features <- function(param_table, nodes, all_edges) {
   # --- 1. Collect general features ---
   general_features <- .collect_general_features(param_table)
 
@@ -31,13 +42,15 @@
   # --- 4. Determine default split hierarchy ---
   default_hierarchy <- .determine_default_split_hierarchy(general_features)
 
-  # --- 5. Assemble and return the final features list ---
-  # We pass the full `lgm_analysis` object through, as it contains the
-  # valuable `element_groups` needed for the layout calculation.
+  # --- 5. Get element groups ---
+  element_groups <- lgm_analysis$element_groups %||% .get_default_element_groups(nodes, all_edges)
+
+  # --- 6. Assemble and return the final features list ---
   c(
     list(
       model_type = final_model_type,
       default_split_hierarchy = default_hierarchy,
+      element_groups = element_groups,
       lgm_analysis = lgm_analysis
     ),
     general_features

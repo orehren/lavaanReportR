@@ -124,6 +124,7 @@
   arg_to_recipe_map <- c(
     "show_plot_elements" = "render_elements",
     "plot_flow_direction" = "rankdir",
+    "manual_ranks" = "manual_ranks",
     "show_estimates" = "show_estimates",
     "show_sig" = "show_sig",
     "show_estimates_above" = "show_estimates_above"

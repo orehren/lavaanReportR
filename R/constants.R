@@ -171,8 +171,8 @@ NODE_STYLES <- list(
 EDGE_STYLES <- list(
   regression = list(minlen = 3), # style = "solid", arrowhead = "normal", penwidth = 1.5,
   loading = list(minlen = 3), # style = "solid", arrowhead = "normal", penwidth = 1.5,
-  moderation = list(arrowhead = "normal"), # style = "solid", penwidth = 1.5
-  moderated_path_segment_1 = list(arrowhead = "none"), # style = "solid", penwidth = 1.5
+  moderation = list(arrowtail = "normal", dir = "back"), # style = "solid", penwidth = 1.5
+  moderated_path_segment_1 = list(arrowhead = "none"), # style = "solid", penwidth = 1.5,
   moderated_path_segment_2 = list(minlen = 1), # style = "solid", arrowhead = "normal", penwidth = 1.5
   covariance = list(style = "dotted", arrowhead = "none", constraint = "false", fontsize = 8), # , penwidth = 1.5,
   # covariance_exo = list(style = "dashed", dir = "both", arrowhead = "none", penwidth = 1.5, fontsize = 8),

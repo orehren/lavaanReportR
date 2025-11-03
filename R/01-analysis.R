@@ -824,12 +824,47 @@
   # Sanitize from/to columns after creation
   all_edges[, from := .sanitize_string(from)][, to := .sanitize_string(to)]
 
-  # --- 3. Transformation for Complex Structures (e.g., Moderation) ---
+  # --- 3. Post-processing for Moderation Edges ---
+  moderation_edges <- all_edges[edge_type == EDGE_TYPES$MODERATION]
+  if (nrow(moderation_edges) > 0) {
+    for (i in seq_len(nrow(moderation_edges))) {
+      mod_edge <- moderation_edges[i, ]
+
+      # Extract predictor and criterion from the interaction term
+      interaction_term_row <- param_table[op == MODEL_OPS$REGRESSIONS & .sanitize_string(rhs) == mod_edge$to]
+      interaction_term <- interaction_term_row$rhs
+      criterion <- .sanitize_string(interaction_term_row$lhs)
+      parts <- strsplit(interaction_term, ":")[[1]]
+      predictor <- .sanitize_string(parts[1])
+
+      # Find the corresponding direct regression edge
+      direct_edge <- all_edges[edge_type == EDGE_TYPES$REGRESSION & from == predictor & to == criterion]
+
+      if (nrow(direct_edge) > 0) {
+        cols_to_transfer <- c("label", "sig", expanded_value_columns)
+
+        # Transfer estimates to segment 2
+        values_to_transfer <- direct_edge[, ..cols_to_transfer]
+        all_edges[edge_type == EDGE_TYPES$MODERATED_PATH_SEGMENT_2 & from == mod_edge$from,
+                  (cols_to_transfer) := values_to_transfer]
+
+        # Clear estimates from segment 1
+        all_edges[edge_type == EDGE_TYPES$MODERATED_PATH_SEGMENT_1 & to == mod_edge$from,
+                  (cols_to_transfer) := NA]
+        all_edges[edge_type == EDGE_TYPES$MODERATED_PATH_SEGMENT_1 & to == mod_edge$from, label := " "]
+
+        # Remove the original direct edge
+        all_edges <- all_edges[!(edge_type == EDGE_TYPES$REGRESSION & from == predictor & to == criterion)]
+      }
+    }
+  }
+
+  # --- 4. Transformation for Complex Structures (e.g., Moderation) ---
   # This step can be expanded later. For now, we create a unique ID.
   # The logic from the old `._modify_moderation_edges` would go here.
   all_edges[, id := paste(id_prefix, from, "to", to, sep = "_")]
 
-  # --- 4. Finalization ---
+  # --- 5. Finalization ---
   # Ensure uniqueness per edge and group.
   unique_cols <- intersect(c("id", group_cols), names(all_edges))
   all_edges <- unique(all_edges, by = unique_cols)

@@ -197,6 +197,22 @@
   }
   initial_ranks <- max(node_levels) - node_levels + 1
 
+  # --- 3a. Automated LGM Covariate Rank Correction ---
+  is_lgm_with_tvc <- "predictors" %in% names(element_groups) && "tv_covariates" %in% names(element_groups)
+  if (is_lgm_with_tvc) {
+    predictor_nodes <- element_groups[["predictors"]]
+    tv_covariate_nodes <- element_groups[["tv_covariates"]]
+
+    # Check if there are any nodes in both groups to act on
+    if (length(predictor_nodes) > 0 && length(tv_covariate_nodes) > 0) {
+      # Determine the target rank from the first predictor node
+      target_rank <- initial_ranks[predictor_nodes[1]]
+
+      # Enforce this rank on all time-varying covariates
+      initial_ranks[tv_covariate_nodes] <- target_rank
+    }
+  }
+
   # --- 3. Apply Manual Rank Overrides ---
   if (!is.null(manual_ranks)) {
     for (group_name in names(manual_ranks)) {

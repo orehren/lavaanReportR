@@ -52,7 +52,11 @@ test_that("Primary axis coordinates are correct for LR and TB layouts", {
   config_lr <- configure_plot(FIXTURE_ANALYZED_STD, recipe = list(rankdir = "LR"))
   layout_lr <- layout(config_lr) |> getElement("layout")
 
-  ranks <- .analyze_layout_structure(FIXTURE_ANALYZED_STD$nodes, FIXTURE_ANALYZED_STD$edges)$levels
+  ranks <- .analyze_layout_structure(
+    FIXTURE_ANALYZED_STD$nodes,
+    FIXTURE_ANALYZED_STD$edges,
+    FIXTURE_ANALYZED_STD$features$element_groups
+  )$levels
   rank_dt <- data.table(id = unlist(ranks, use.names = FALSE), rank = as.numeric(rep(names(ranks), lengths(ranks))))
   layout_lr[rank_dt, on = "id", rank := i.rank]
 
